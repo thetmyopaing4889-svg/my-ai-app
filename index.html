@@ -2,12 +2,21 @@
 <html lang="my">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AI Architect</title>
     <style>
         /* CSS Reset & Dark Mode */
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, sans-serif; }
-        body { background-color: #0f0f0f; color: #ffffff; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        /* Safe Area Fix for iOS - ဒါက အောက်ဆုံး Bar ပုန်းမနေအောင် ပြင်ထားတာ */
+        body { 
+            background-color: #0f0f0f; 
+            color: #ffffff; 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden; 
+            padding-bottom: env(safe-area-inset-bottom);
+        }
         
         /* Header */
         .header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: #0f0f0f; border-bottom: 1px solid #222; position: relative; z-index: 10; }
@@ -53,17 +62,28 @@
         .ai-actions { margin-top: 5px; display: flex; gap: 10px; font-size: 12px; color: #888; }
         .ai-actions span { cursor: pointer; }
         
-        /* Input Area */
-        .input-area { padding: 10px 15px 15px; background: #0f0f0f; border-top: 1px solid #222; display: flex; align-items: flex-end; gap: 10px; }
+        /* Input Area - Safe Area Padding ထည့်ထားတယ် */
+        .input-area { 
+            padding: 10px 15px; 
+            background: #0f0f0f; 
+            border-top: 1px solid #222; 
+            display: flex; 
+            align-items: flex-end; 
+            gap: 10px; 
+            padding-bottom: max(15px, env(safe-area-inset-bottom));
+        }
         .chat-input-wrapper { flex-grow: 1; display: flex; align-items: center; background: #1e1e1e; border-radius: 24px; padding: 8px 15px; border: 1px solid #333; }
         .chat-input-wrapper input { flex-grow: 1; background: transparent; border: none; color: #fff; outline: none; font-size: 16px; padding: 5px 0; }
         .attach-btn { color: #888; font-size: 20px; margin-right: 10px; cursor: pointer; }
         .action-row { display: flex; align-items: center; gap: 10px; }
+        
+        /* Debate Toggle UI */
         .debate-toggle { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #888; cursor: pointer; }
         .toggle-switch { width: 30px; height: 16px; background: #333; border-radius: 10px; position: relative; cursor: pointer; transition: 0.2s; }
         .toggle-switch.on { background: #4a90e2; }
         .toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: #fff; border-radius: 50%; transition: 0.2s; }
         .toggle-switch.on::after { left: 16px; }
+        
         .send-btn { width: 40px; height: 40px; border-radius: 50%; background: #4a90e2; border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; }
         
         /* Utility */
@@ -125,6 +145,7 @@
             <span class="attach-btn">+</span>
             <input type="text" placeholder="Ask AI anything..." id="chatInput">
             <div class="action-row">
+                <!-- Debate Toggle (Send button ဘေးနားမှာ ထည့်ထားပြီးပြီ) -->
                 <div class="debate-toggle" onclick="toggleDebate()">
                     <span>Debate</span>
                     <div class="toggle-switch" id="debateSwitch"></div>
