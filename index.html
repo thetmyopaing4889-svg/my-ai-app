@@ -7,7 +7,7 @@
     <style>
         /* CSS Reset & Dark Mode */
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, sans-serif; }
-        /* Safe Area Fix for iOS - ဒါက အောက်ဆုံး Bar ပုန်းမနေအောင် ပြင်ထားတာ */
+        
         body { 
             background-color: #0f0f0f; 
             color: #ffffff; 
@@ -18,8 +18,18 @@
             padding-bottom: env(safe-area-inset-bottom);
         }
         
-        /* Header */
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: #0f0f0f; border-bottom: 1px solid #222; position: relative; z-index: 10; }
+        /* Header - မညှစ်ရအောင် flex-shrink: 0 ထည့်ထားတယ် */
+        .header { 
+            flex-shrink: 0; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 15px 20px; 
+            background: #0f0f0f; 
+            border-bottom: 1px solid #222; 
+            position: relative; 
+            z-index: 10; 
+        }
         .menu-btn { font-size: 24px; cursor: pointer; color: #aaa; }
         .header-center { text-align: center; flex-grow: 1; }
         .header-title { font-weight: 600; font-size: 16px; }
@@ -40,7 +50,7 @@
         .username { font-size: 14px; font-weight: 500; }
         .settings-btn { font-size: 20px; cursor: pointer; color: #888; }
 
-        /* Main Chat Area */
+        /* Main Chat Area - ကျန်တဲ့နေရာအပြည့်ယူဖို့ flex-grow: 1 */
         .chat-area { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
         
         /* Empty State */
@@ -51,7 +61,7 @@
         .pill-btn { padding: 8px 20px; border-radius: 20px; border: 1px solid #333; background: transparent; color: #aaa; cursor: pointer; font-size: 14px; transition: 0.2s; }
         .pill-btn.active { background: #4a90e2; color: #fff; border-color: #4a90e2; }
         
-        /* Active Chat (Hidden initially) */
+        /* Active Chat */
         .active-chat { display: none; flex-grow: 1; overflow-y: auto; padding: 20px; flex-direction: column; }
         .message-row { display: flex; margin-bottom: 15px; }
         .message-row.user { justify-content: flex-end; }
@@ -62,15 +72,17 @@
         .ai-actions { margin-top: 5px; display: flex; gap: 10px; font-size: 12px; color: #888; }
         .ai-actions span { cursor: pointer; }
         
-        /* Input Area - Safe Area Padding ထည့်ထားတယ် */
+        /* Input Area - ဒီမှာ အဓိကပြင်ချက် ၂ ခု ထည့်ထားတယ် (flex-shrink: 0 နဲ့ min-height) */
         .input-area { 
+            flex-shrink: 0; 
+            min-height: 70px; 
             padding: 10px 15px; 
+            padding-bottom: max(15px, env(safe-area-inset-bottom));
             background: #0f0f0f; 
             border-top: 1px solid #222; 
             display: flex; 
             align-items: flex-end; 
             gap: 10px; 
-            padding-bottom: max(15px, env(safe-area-inset-bottom));
         }
         .chat-input-wrapper { flex-grow: 1; display: flex; align-items: center; background: #1e1e1e; border-radius: 24px; padding: 8px 15px; border: 1px solid #333; }
         .chat-input-wrapper input { flex-grow: 1; background: transparent; border: none; color: #fff; outline: none; font-size: 16px; padding: 5px 0; }
@@ -145,7 +157,7 @@
             <span class="attach-btn">+</span>
             <input type="text" placeholder="Ask AI anything..." id="chatInput">
             <div class="action-row">
-                <!-- Debate Toggle (Send button ဘေးနားမှာ ထည့်ထားပြီးပြီ) -->
+                <!-- Debate Toggle -->
                 <div class="debate-toggle" onclick="toggleDebate()">
                     <span>Debate</span>
                     <div class="toggle-switch" id="debateSwitch"></div>
@@ -166,19 +178,18 @@
             document.getElementById('overlay').classList.toggle('open');
         }
 
-        // Set Mode (General / Professional)
+        // Set Mode
         function setMode(mode) {
             currentMode = mode;
             document.getElementById('headerMode').innerText = mode;
             document.getElementById('emptyText').innerText = `Start chatting with ${mode}`;
             
-            // Update pill buttons styling
             document.getElementById('pillGeneral').classList.remove('active');
             document.getElementById('pillProfessional').classList.remove('active');
             document.getElementById(mode === 'General' ? 'pillGeneral' : 'pillProfessional').classList.add('active');
         }
 
-        // New Chat (Reset to Empty State)
+        // New Chat
         function newChat() {
             document.getElementById('activeChat').style.display = 'none';
             document.getElementById('emptyState').style.display = 'flex';
@@ -191,23 +202,20 @@
             document.getElementById('debateSwitch').classList.toggle('on');
         }
 
-        // Send Message (Mockup for Phase 1)
+        // Send Message
         function sendMessage() {
             const input = document.getElementById('chatInput').value;
             if(!input.trim()) return;
 
-            // Switch to Active Chat state
             document.getElementById('emptyState').style.display = 'none';
             document.getElementById('activeChat').style.display = 'flex';
 
-            // Add mock user message
             const chatContainer = document.getElementById('activeChat');
             const userMsg = document.createElement('div');
             userMsg.className = 'message-row user';
             userMsg.innerHTML = `<div class="message-bubble user">${input}</div>`;
             chatContainer.appendChild(userMsg);
 
-            // Add mock AI response (with Copy/Download buttons)
             setTimeout(() => {
                 const aiMsg = document.createElement('div');
                 aiMsg.className = 'message-row ai';
