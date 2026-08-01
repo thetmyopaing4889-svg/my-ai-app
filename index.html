@@ -49,14 +49,14 @@
         .username { font-size: 14px; font-weight: 500; }
         .settings-btn { font-size: 20px; cursor: pointer; color: #888; }
 
-        /* Main Chat Area - Input Bar အတွက် နေရာလွတ်ချန်ထားရန် padding-bottom ထည့်ထားတယ် */
+        /* Main Chat Area */
         .chat-area { 
             flex-grow: 1; 
             display: flex; 
             flex-direction: column; 
             overflow: hidden; 
             position: relative; 
-            padding-bottom: 80px; /* Input bar အမြင့်အတွက် နေရာလွတ်ထားခြင်း */
+            padding-bottom: 80px; 
         }
         
         /* Empty State */
@@ -78,7 +78,7 @@
         .ai-actions { margin-top: 5px; display: flex; gap: 10px; font-size: 12px; color: #888; }
         .ai-actions span { cursor: pointer; }
         
-        /* Input Area - Position Fixed နဲ့ အောက်ဆုံးမှာ ကပ်ထားခြင်း */
+        /* Input Area */
         .input-area { 
             position: fixed; 
             bottom: 0; 
@@ -89,14 +89,58 @@
             background: #0f0f0f; 
             border-top: 1px solid #222; 
             display: flex; 
-            align-items: center; 
+            align-items: flex-end; 
             gap: 10px; 
             z-index: 50; 
         }
-        .chat-input-wrapper { flex-grow: 1; display: flex; align-items: center; background: #1e1e1e; border-radius: 24px; padding: 8px 15px; border: 1px solid #333; }
-        .chat-input-wrapper input { flex-grow: 1; background: transparent; border: none; color: #fff; outline: none; font-size: 16px; padding: 5px 0; }
-        .attach-btn { color: #888; font-size: 20px; margin-right: 10px; cursor: pointer; }
-        .action-row { display: flex; align-items: center; gap: 10px; }
+        .chat-input-wrapper { 
+            flex-grow: 1; 
+            display: flex; 
+            align-items: flex-end; 
+            background: #1e1e1e; 
+            border-radius: 24px; 
+            padding: 8px 12px; 
+            border: 1px solid #333; 
+        }
+        
+        /* Textarea */
+        .chat-input-wrapper textarea { 
+            flex-grow: 1; 
+            background: transparent; 
+            border: none; 
+            color: #fff; 
+            outline: none; 
+            font-size: 16px; 
+            padding: 5px 0; 
+            resize: none; 
+            overflow: hidden; 
+            min-height: 24px; 
+            max-height: 120px; 
+            line-height: 1.5;
+            width: 100%;
+            font-family: inherit;
+        }
+        
+        /* Circular + Button for File Upload */
+        .attach-btn { 
+            width: 28px; 
+            height: 28px; 
+            border-radius: 50%; 
+            background: #2a2a2a; 
+            border: none; 
+            color: #aaa; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 20px; 
+            cursor: pointer; 
+            align-self: center; 
+            flex-shrink: 0; 
+            margin-right: 8px;
+        }
+        .attach-btn:hover { background: #333; }
+
+        .action-row { display: flex; align-items: center; gap: 10px; align-self: center; }
         
         /* Debate Toggle UI */
         .debate-toggle { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #888; cursor: pointer; }
@@ -163,8 +207,13 @@
     <!-- Input Area -->
     <div class="input-area">
         <div class="chat-input-wrapper">
-            <span class="attach-btn">+</span>
-            <input type="text" placeholder="Ask AI anything..." id="chatInput">
+            <!-- Circular + Button -->
+            <button class="attach-btn" onclick="document.getElementById('fileInput').click()">+</button>
+            <!-- Hidden File Input -->
+            <input type="file" id="fileInput" style="display:none" accept="image/*, .pdf, .txt" onchange="handleFileUpload(this)">
+            
+            <textarea id="chatInput" rows="1" placeholder="Ask AI anything..."></textarea>
+            
             <div class="action-row">
                 <!-- Debate Toggle -->
                 <div class="debate-toggle" onclick="toggleDebate()">
@@ -180,6 +229,7 @@
         // State
         let isDebateOn = false;
         let currentMode = 'General';
+        let attachedFile = null;
 
         // Sidebar Toggle
         function toggleSidebar() {
@@ -203,6 +253,8 @@
             document.getElementById('activeChat').style.display = 'none';
             document.getElementById('emptyState').style.display = 'flex';
             document.getElementById('chatInput').value = '';
+            document.getElementById('chatInput').style.height = 'auto'; 
+            attachedFile = null; // Reset file
         }
 
         // Debate Toggle
@@ -211,18 +263,42 @@
             document.getElementById('debateSwitch').classList.toggle('on');
         }
 
+        // Auto-Expand Textarea height
+        const chatInput = document.getElementById('chatInput');
+        chatInput.addEventListener('input', function() {
+            this.style.height = 'auto'; 
+            this.style.height = (this.scrollHeight) + 'px'; 
+        });
+
+        // Handle File Upload
+        function handleFileUpload(input) {
+            if (input.files && input.files[0]) {
+                attachedFile = input.files[0];
+                // ဖိုင်ရွေးပြီးသွားရင် CEO ကြီးကို Alert နဲ့ အသိပေးမယ်
+                alert(`📎 File Attached: ${attachedFile.name} (${(attachedFile.size / 1024).toFixed(2)} KB)`);
+                // နောက်ပိုင်း Phase တွေမှာ ဒီ File ကို Backend ဆီ ပို့ပြီး AI ကို Process လုပ်ခိုင်းသွားပါမယ်။
+            }
+        }
+
         // Send Message
         function sendMessage() {
             const input = document.getElementById('chatInput').value;
-            if(!input.trim()) return;
+            if(!input.trim() && !attachedFile) return;
 
             document.getElementById('emptyState').style.display = 'none';
             document.getElementById('activeChat').style.display = 'flex';
 
             const chatContainer = document.getElementById('activeChat');
+            
+            // Construct user message content
+            let userContent = input;
+            if (attachedFile) {
+                userContent += ` (Attached: ${attachedFile.name})`;
+            }
+
             const userMsg = document.createElement('div');
             userMsg.className = 'message-row user';
-            userMsg.innerHTML = `<div class="message-bubble user">${input}</div>`;
+            userMsg.innerHTML = `<div class="message-bubble user">${userContent}</div>`;
             chatContainer.appendChild(userMsg);
 
             setTimeout(() => {
@@ -241,7 +317,11 @@
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }, 500);
 
+            // Reset input, height, and file
             document.getElementById('chatInput').value = '';
+            document.getElementById('chatInput').style.height = 'auto';
+            attachedFile = null;
+            document.getElementById('fileInput').value = ''; // Clear file input
         }
     </script>
 </body>
