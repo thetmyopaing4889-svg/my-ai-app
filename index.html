@@ -15,10 +15,9 @@
             display: flex; 
             flex-direction: column; 
             overflow: hidden; 
-            padding-bottom: env(safe-area-inset-bottom);
         }
         
-        /* Header - မညှစ်ရအောင် flex-shrink: 0 ထည့်ထားတယ် */
+        /* Header */
         .header { 
             flex-shrink: 0; 
             display: flex; 
@@ -50,8 +49,15 @@
         .username { font-size: 14px; font-weight: 500; }
         .settings-btn { font-size: 20px; cursor: pointer; color: #888; }
 
-        /* Main Chat Area - ကျန်တဲ့နေရာအပြည့်ယူဖို့ flex-grow: 1 */
-        .chat-area { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        /* Main Chat Area - Input Bar အတွက် နေရာလွတ်ချန်ထားရန် padding-bottom ထည့်ထားတယ် */
+        .chat-area { 
+            flex-grow: 1; 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden; 
+            position: relative; 
+            padding-bottom: 80px; /* Input bar အမြင့်အတွက် နေရာလွတ်ထားခြင်း */
+        }
         
         /* Empty State */
         .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px; text-align: center; }
@@ -72,17 +78,20 @@
         .ai-actions { margin-top: 5px; display: flex; gap: 10px; font-size: 12px; color: #888; }
         .ai-actions span { cursor: pointer; }
         
-        /* Input Area - ဒီမှာ အဓိကပြင်ချက် ၂ ခု ထည့်ထားတယ် (flex-shrink: 0 နဲ့ min-height) */
+        /* Input Area - Position Fixed နဲ့ အောက်ဆုံးမှာ ကပ်ထားခြင်း */
         .input-area { 
-            flex-shrink: 0; 
-            min-height: 70px; 
+            position: fixed; 
+            bottom: 0; 
+            left: 0; 
+            width: 100%; 
             padding: 10px 15px; 
             padding-bottom: max(15px, env(safe-area-inset-bottom));
             background: #0f0f0f; 
             border-top: 1px solid #222; 
             display: flex; 
-            align-items: flex-end; 
+            align-items: center; 
             gap: 10px; 
+            z-index: 50; 
         }
         .chat-input-wrapper { flex-grow: 1; display: flex; align-items: center; background: #1e1e1e; border-radius: 24px; padding: 8px 15px; border: 1px solid #333; }
         .chat-input-wrapper input { flex-grow: 1; background: transparent; border: none; color: #fff; outline: none; font-size: 16px; padding: 5px 0; }
