@@ -5,13 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AI Architect</title>
     <style>
-        /* CSS Reset & Dark Mode */
+        /* Android Chrome အတွက် -webkit-fill-available ထည့်ထားတယ် */
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, sans-serif; }
         
-        body { 
+        html, body { 
             background-color: #0f0f0f; 
             color: #ffffff; 
-            height: 100vh; 
+            height: 100vh;
+            height: -webkit-fill-available;
             display: flex; 
             flex-direction: column; 
             overflow: hidden; 
@@ -43,21 +44,13 @@
         .search-bar { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #333; background: #222; color: #fff; margin-bottom: 20px; }
         .session-list { flex-grow: 1; overflow-y: auto; }
         .session-item { padding: 12px; border-bottom: 1px solid #222; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .session-item:hover { background: #222; }
         .delete-btn { color: #ff4444; cursor: pointer; font-size: 14px; }
         .sidebar-footer { border-top: 1px solid #222; padding-top: 15px; display: flex; justify-content: space-between; align-items: center; }
         .username { font-size: 14px; font-weight: 500; }
         .settings-btn { font-size: 20px; cursor: pointer; color: #888; }
 
         /* Main Chat Area */
-        .chat-area { 
-            flex-grow: 1; 
-            display: flex; 
-            flex-direction: column; 
-            overflow: hidden; 
-            position: relative; 
-            padding-bottom: 80px; 
-        }
+        .chat-area { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
         
         /* Empty State */
         .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px; text-align: center; }
@@ -78,7 +71,7 @@
         .ai-actions { margin-top: 5px; display: flex; gap: 10px; font-size: 12px; color: #888; }
         .ai-actions span { cursor: pointer; }
         
-        /* Input Area */
+        /* Input Area - Android အတွက် Position Fixed နဲ့ ကပ်ထားခြင်း */
         .input-area { 
             position: fixed; 
             bottom: 0; 
@@ -138,7 +131,6 @@
             flex-shrink: 0; 
             margin-right: 8px;
         }
-        .attach-btn:hover { background: #333; }
 
         .action-row { display: flex; align-items: center; gap: 10px; align-self: center; }
         
@@ -151,7 +143,6 @@
         
         .send-btn { width: 40px; height: 40px; border-radius: 50%; background: #4a90e2; border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; }
         
-        /* Utility */
         .hidden { display: none !important; }
     </style>
 </head>
@@ -163,12 +154,7 @@
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <input type="text" class="search-bar" placeholder="Search sessions...">
-        <div class="session-list" id="sessionList">
-            <div class="session-item">
-                <span>Project: AI App Builder</span>
-                <span class="delete-btn">🗑️</span>
-            </div>
-        </div>
+        <div class="session-list" id="sessionList"></div>
         <div class="sidebar-footer">
             <span class="username">CEO User</span>
             <span class="settings-btn">•••</span>
@@ -198,24 +184,16 @@
         </div>
 
         <!-- Active Chat History -->
-        <div class="active-chat" id="activeChat">
-            <div class="message-row user"><div class="message-bubble user">Hello, build a calculator.</div></div>
-            <div class="message-row ai"><div class="message-bubble ai">Here is the HTML/CSS code for a calculator...</div></div>
-        </div>
+        <div class="active-chat" id="activeChat"></div>
     </div>
 
     <!-- Input Area -->
     <div class="input-area">
         <div class="chat-input-wrapper">
-            <!-- Circular + Button -->
             <button class="attach-btn" onclick="document.getElementById('fileInput').click()">+</button>
-            <!-- Hidden File Input -->
-            <input type="file" id="fileInput" style="display:none" accept="image/*, .pdf, .txt" onchange="handleFileUpload(this)">
-            
+            <input type="file" id="fileInput" style="display:none" accept="image/*, .pdf, .txt">
             <textarea id="chatInput" rows="1" placeholder="Ask AI anything..."></textarea>
-            
             <div class="action-row">
-                <!-- Debate Toggle -->
                 <div class="debate-toggle" onclick="toggleDebate()">
                     <span>Debate</span>
                     <div class="toggle-switch" id="debateSwitch"></div>
@@ -226,79 +204,53 @@
     </div>
 
     <script>
-        // State
         let isDebateOn = false;
         let currentMode = 'General';
-        let attachedFile = null;
 
-        // Sidebar Toggle
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('open');
             document.getElementById('overlay').classList.toggle('open');
         }
 
-        // Set Mode
         function setMode(mode) {
             currentMode = mode;
             document.getElementById('headerMode').innerText = mode;
             document.getElementById('emptyText').innerText = `Start chatting with ${mode}`;
-            
             document.getElementById('pillGeneral').classList.remove('active');
             document.getElementById('pillProfessional').classList.remove('active');
             document.getElementById(mode === 'General' ? 'pillGeneral' : 'pillProfessional').classList.add('active');
         }
 
-        // New Chat
         function newChat() {
             document.getElementById('activeChat').style.display = 'none';
+            document.getElementById('activeChat').innerHTML = '';
             document.getElementById('emptyState').style.display = 'flex';
             document.getElementById('chatInput').value = '';
             document.getElementById('chatInput').style.height = 'auto'; 
-            attachedFile = null; // Reset file
         }
 
-        // Debate Toggle
         function toggleDebate() {
             isDebateOn = !isDebateOn;
             document.getElementById('debateSwitch').classList.toggle('on');
         }
 
-        // Auto-Expand Textarea height
         const chatInput = document.getElementById('chatInput');
         chatInput.addEventListener('input', function() {
             this.style.height = 'auto'; 
             this.style.height = (this.scrollHeight) + 'px'; 
         });
 
-        // Handle File Upload
-        function handleFileUpload(input) {
-            if (input.files && input.files[0]) {
-                attachedFile = input.files[0];
-                // ဖိုင်ရွေးပြီးသွားရင် CEO ကြီးကို Alert နဲ့ အသိပေးမယ်
-                alert(`📎 File Attached: ${attachedFile.name} (${(attachedFile.size / 1024).toFixed(2)} KB)`);
-                // နောက်ပိုင်း Phase တွေမှာ ဒီ File ကို Backend ဆီ ပို့ပြီး AI ကို Process လုပ်ခိုင်းသွားပါမယ်။
-            }
-        }
-
-        // Send Message
         function sendMessage() {
             const input = document.getElementById('chatInput').value;
-            if(!input.trim() && !attachedFile) return;
+            if(!input.trim()) return;
 
             document.getElementById('emptyState').style.display = 'none';
             document.getElementById('activeChat').style.display = 'flex';
 
             const chatContainer = document.getElementById('activeChat');
-            
-            // Construct user message content
-            let userContent = input;
-            if (attachedFile) {
-                userContent += ` (Attached: ${attachedFile.name})`;
-            }
-
             const userMsg = document.createElement('div');
             userMsg.className = 'message-row user';
-            userMsg.innerHTML = `<div class="message-bubble user">${userContent}</div>`;
+            userMsg.innerHTML = `<div class="message-bubble user">${input}</div>`;
             chatContainer.appendChild(userMsg);
 
             setTimeout(() => {
@@ -306,7 +258,7 @@
                 aiMsg.className = 'message-row ai';
                 aiMsg.innerHTML = `
                     <div class="message-bubble ai">
-                        This is a mock response from the AI (Phase 1).<br>Code will be added in later phases.<br><br>
+                        Mock response from AI.<br><br>
                         <div class="ai-actions">
                             <span onclick="alert('Copied!')">📋 Copy</span>
                             <span onclick="alert('Downloaded!')">📥 Download</span>
@@ -317,11 +269,8 @@
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }, 500);
 
-            // Reset input, height, and file
             document.getElementById('chatInput').value = '';
             document.getElementById('chatInput').style.height = 'auto';
-            attachedFile = null;
-            document.getElementById('fileInput').value = ''; // Clear file input
         }
     </script>
 </body>
