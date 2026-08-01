@@ -169,10 +169,10 @@
         </div>
     </div>
 
-    <!-- 2. Overlay -->
+    <!-- 2. Overlay (ဒီ Overlay ကို နှိပ်ရင် ပြန်ပိတ်သွားအောင် toggleSidebar() ကိုခေါ်ထားပြီး) -->
     <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
 
-    <!-- 3. Main App Container (ဒီအထဲက အကုန်လုံး ညာဘက်တွန်းထုတ်ခံရမယ်) -->
+    <!-- 3. Main App Container -->
     <div class="app-container" id="appContainer">
         
         <div class="header">
@@ -223,12 +223,13 @@
         let isDebateOn = false;
         let currentMode = 'General';
 
+        // Sidebar Toggle Function (ပြန်ပြင်ပြီးသား)
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('overlay');
             const appContainer = document.getElementById('appContainer');
             
-            // Toggle Class တွေ ခေါ်လိုက်ရုံပါပဲ
+            // Toggle Classes
             sidebar.classList.toggle('open');
             overlay.classList.toggle('open');
             appContainer.classList.toggle('sidebar-open');
