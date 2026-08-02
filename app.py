@@ -19,6 +19,7 @@ PROVIDER_CONFIG = {
     "groq":       {"base_url": "https://api.groq.com/openai/v1",     "model": "llama-3.3-70b-versatile"},
     "openrouter": {"base_url": "https://openrouter.ai/api/v1",       "model": "deepseek/deepseek-r1:free"},
 }
+# ✅ Fixed back to the correct 2026 model
 GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
 
 # ============================================
@@ -92,7 +93,6 @@ def debate_parallel(prompt, api_keys):
 # 5. Justice AI (Recommendation Mode - Debate OFF)
 # ============================================
 def justice_ai_recommendation(debate_results, original_prompt, api_keys, justice_provider, justice_key):
-    # Safe Fallback Logic for Justice Key
     if not justice_key:
         for p in ["gemini", "deepseek", "groq", "github", "openrouter"]:
             if p in api_keys and isinstance(api_keys[p], list) and len(api_keys[p]) > 0:
@@ -138,7 +138,6 @@ def consensus_debate(prompt, api_keys):
     
     consensus_results = debate_parallel(consensus_prompt, api_keys)
     
-    # Extract first valid result as unified output
     for agent, text in consensus_results.items():
         if not text.startswith("Error:"):
             return f"🤝 **Debate Consensus Answer (Validated by Multi-Agent Pool):**\n\n{text}"
@@ -167,13 +166,11 @@ def chat():
     if not user_message.strip():
         return jsonify({"error": "Empty message"}), 400
 
-    # System Prompts based on Persona Mode
     if mode == "General":
         base_prompt = "You are a helpful, friendly, and concise AI assistant. Answer clearly and directly."
     else:
         base_prompt = "You are a Senior Software Architect and Lead Developer. Output step-by-step production-grade code, security edge-case analyses, and clear system architecture guidelines."
 
-    # Project Guardian (PG) Context Anchor Injection
     anchor_context = ""
     if pg_state.get('locked'):
         core_spec = pg_state.get('coreSpec', 'Defined in prior planning')
@@ -185,15 +182,11 @@ def chat():
 
     try:
         if not debate_on:
-            # OFF: Normal Multi-Agent Execution + Justice AI Evaluation
             debate_results = debate_parallel(full_prompt, api_keys)
-            
             j_provider = justice_selector.get('provider', 'gemini')
             j_key = justice_selector.get('key', '')
-            
             ai_reply = justice_ai_recommendation(debate_results, full_prompt, api_keys, j_provider, j_key)
         else:
-            # ON: Multi-Agent Consensus Debate
             ai_reply = consensus_debate(full_prompt, api_keys)
             
     except Exception as e:
