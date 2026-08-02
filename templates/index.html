@@ -49,42 +49,15 @@
         .ai-actions { margin-top: 5px; display: flex; gap: 10px; font-size: 12px; color: #888; }
         .ai-actions span { cursor: pointer; user-select: none; }
         
-        /* ✨ Input Area - ပြန်ပြင်ပြီးသား Layout */
-        .input-area { 
-            position: relative; 
-            width: 100%; 
-            padding: 10px 15px; 
-            padding-bottom: max(15px, env(safe-area-inset-bottom));
-            background: #0f0f0f; 
-            border-top: 1px solid #222; 
-            display: flex; 
-            align-items: flex-end; 
-            gap: 10px; 
-            z-index: 10; 
-        }
-        /* + ခလုတ်ကို အပြင်ဘက်မှာ ထားဖို့ */
-        .attach-outside {
-            width: 32px; height: 32px; border-radius: 50%; background: transparent; border: none;
-            color: #888; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0; margin-bottom: 5px;
-        }
-        .input-container { 
-            flex-grow: 1; 
-            display: flex; 
-            flex-direction: column; 
-            background: #1e1e1e; 
-            border-radius: 24px; 
-            padding: 10px 16px; 
-            border: 1px solid #333; 
-            min-height: 60px; 
-        }
+        /* Input Area */
+        .input-area { position: relative; width: 100%; padding: 10px 15px; padding-bottom: max(15px, env(safe-area-inset-bottom)); background: #0f0f0f; border-top: 1px solid #222; display: flex; align-items: flex-end; gap: 10px; z-index: 10; }
+        .attach-outside { width: 32px; height: 32px; border-radius: 50%; background: transparent; border: none; color: #888; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-bottom: 5px; }
+        .input-container { flex-grow: 1; display: flex; flex-direction: column; background: #1e1e1e; border-radius: 24px; padding: 10px 16px; border: 1px solid #333; min-height: 100px; }
         .input-top-row { display: flex; width: 100%; }
-        .input-top-row textarea { 
-            flex-grow: 1; background: transparent; border: none; color: #fff; outline: none; font-size: 16px; padding: 0; resize: none; overflow: hidden; min-height: 24px; max-height: 100px; line-height: 1.5; width: 100%; font-family: inherit; margin-top: 2px;
-        }
+        .input-top-row textarea { flex-grow: 1; background: transparent; border: none; color: #fff; outline: none; font-size: 16px; padding: 0; resize: none; overflow: hidden; min-height: 24px; max-height: 100px; line-height: 1.5; width: 100%; font-family: inherit; margin-top: 2px; }
         .input-bottom-row { display: flex; align-items: center; justify-content: flex-end; margin-top: 8px; width: 100%; gap: 10px; }
 
-        /* PG Controls (Lock, Sync, Edit) ကို ထည့်ထားပြီ */
+        /* PG Controls */
         .pg-controls { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; width: 100%; }
         .pg-btn { padding: 4px 12px; border-radius: 12px; border: 1px solid #444; background: #1a1a1a; color: #aaa; font-size: 12px; cursor: pointer; transition: 0.2s; }
         .pg-btn.active { border-color: #4a90e2; color: #4a90e2; }
@@ -100,8 +73,9 @@
         .send-btn { width: 32px; height: 32px; border-radius: 50%; background: #4a90e2; border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; flex-shrink: 0; }
         .hidden { display: none !important; }
 
-        /* Settings Modal (z-index မြှင့်ထားတယ်) */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 999; display: none; justify-content: center; align-items: center; }
+        /* Settings Modal */
+        /* ✅ Bug #2 Fixed: z-index increased to 9999 */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; display: none; justify-content: center; align-items: center; }
         .modal-overlay.open { display: flex; }
         .modal-content { background: #1e1e1e; width: 90%; max-width: 400px; border-radius: 16px; padding: 20px; border: 1px solid #333; max-height: 80vh; overflow-y: auto; }
         .modal-title { font-size: 20px; font-weight: bold; margin-bottom: 15px; }
@@ -122,6 +96,8 @@
         .toast-item { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: slideIn 0.3s ease; pointer-events: auto; display: flex; justify-content: space-between; align-items: center; }
         .toast-item.error { border-color: #ff4444; background: #2a1a1a; }
         .toast-item.warning { border-color: #ffa500; background: #2a2a1a; }
+        /* ✅ Bug #6 Fixed: Added success style */
+        .toast-item.success { border-color: #4caf50; background: #1b2e1b; }
         .toast-close { cursor: pointer; color: #888; font-size: 16px; margin-left: 10px; }
         @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -179,7 +155,8 @@
         <div class="session-list" id="sessionList"></div>
         <div class="sidebar-footer">
             <span class="username">CEO User</span>
-            <span class="settings-btn" onclick="toggleSettings()">•••</span>
+            <!-- ✅ Bug #2 Fixed: Changed onclick to openSettingsFromSidebar() -->
+            <span class="settings-btn" onclick="openSettingsFromSidebar()">•••</span>
         </div>
     </div>
     <div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
@@ -207,13 +184,13 @@
             <div class="active-chat" id="activeChat"></div>
         </div>
 
-        <!-- ✨ Input Area (ပြန်ပြင်ပြီးသား) -->
+        <!-- Input Area -->
         <div class="input-area">
             <button class="attach-outside" onclick="document.getElementById('fileInput').click()">+</button>
             <input type="file" id="fileInput" style="display:none">
 
             <div class="input-container">
-                <!-- ✅ Lock/Edit/Sync ခလုတ်တွေ ဒီမှာရှိပါတယ် -->
+                <!-- PG Controls -->
                 <div class="pg-controls" id="pgControls">
                     <button class="pg-btn" id="btnLock" onclick="lockPlan()">🔒 Lock Plan</button>
                     <button class="pg-btn" id="btnSync" onclick="syncPhase()">🔄 Sync / Next Phase</button>
@@ -248,6 +225,16 @@
             if(modal.classList.contains('open')) {
                 try { loadSettingsUI(); } catch(e) { console.error(e); }
             }
+        }
+
+        // ✅ Bug #2 Fixed: Function to close sidebar first
+        function openSettingsFromSidebar() {
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('overlay').classList.remove('open');
+            document.getElementById('appContainer').classList.remove('sidebar-open');
+            setTimeout(() => {
+                toggleSettings();
+            }, 150);
         }
 
         function loadSettingsUI() {
@@ -337,7 +324,15 @@
         }
 
         // ------------- PG Logic -------------
+        // ✅ Bug #1 Fixed: Added mode check and display logic
         function updatePGUI() {
+            const pgControls = document.getElementById('pgControls');
+            if(currentMode === 'Professional') {
+                pgControls.style.display = 'flex';
+            } else {
+                pgControls.style.display = 'none';
+            }
+
             const btnLock = document.getElementById('btnLock');
             const btnSync = document.getElementById('btnSync');
             const btnEdit = document.getElementById('btnEdit');
@@ -383,6 +378,7 @@
             document.getElementById('appContainer').classList.toggle('sidebar-open');
         }
 
+        // ✅ Bug #1 Fixed: Added updatePGUI() at the end
         function setMode(mode) {
             currentMode = mode;
             document.getElementById('headerMode').innerText = mode;
@@ -390,6 +386,7 @@
             document.getElementById('pillGeneral').classList.remove('active');
             document.getElementById('pillProfessional').classList.remove('active');
             document.getElementById(mode === 'General' ? 'pillGeneral' : 'pillProfessional').classList.add('active');
+            updatePGUI();
         }
 
         function newChat() {
@@ -417,6 +414,19 @@
                     setTimeout(() => { e.target.innerText = originalText; }, 2000);
                 });
             }
+        });
+
+        // ✅ Bug #7 Fixed: File Upload Event Listener
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('fileInput').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if(file) {
+                    const input = document.getElementById('chatInput');
+                    input.value = `📎 ${file.name} ` + input.value;
+                    input.focus();
+                    showToast(`📎 File attached: ${file.name}`, 'success');
+                }
+            });
         });
 
         // ------------- Send Message -------------
@@ -472,6 +482,12 @@
                     signal: controller.signal
                 });
                 clearTimeout(timeoutId); clearTimeout(wakeUpTimer);
+
+                // ✅ Bug #5 Fixed: API Error Handling check
+                if (!response.ok) {
+                    throw new Error(`Server Error: ${response.status}`);
+                }
+
                 const data = await response.json();
                 document.getElementById('loadingMsg').remove();
 
@@ -485,12 +501,25 @@
 
                 const actionsDiv = document.createElement('div');
                 actionsDiv.className = 'ai-actions';
+
                 const copySpan = document.createElement('span');
                 copySpan.className = 'copy-btn'; copySpan.textContent = '📋 Copy';
                 copySpan.dataset.text = data.response;
+
                 const downloadSpan = document.createElement('span');
                 downloadSpan.textContent = '📥 Download';
-                downloadSpan.onclick = () => alert('Download started!');
+                // ✅ Bug #4 Fixed: Actual file download logic
+                downloadSpan.onclick = () => {
+                    const blob = new Blob([data.response], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'ai-response.txt';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                };
 
                 actionsDiv.appendChild(copySpan); actionsDiv.appendChild(downloadSpan);
                 aiBubble.appendChild(actionsDiv); aiMsgDiv.appendChild(aiBubble);
@@ -506,6 +535,7 @@
             document.getElementById('chatInput').value = ''; document.getElementById('chatInput').style.height = 'auto';
         }
 
+        // Initialize
         document.addEventListener('DOMContentLoaded', () => { updatePGUI(); loadSettingsUI(); });
     </script>
 </body>
