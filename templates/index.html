@@ -5,11 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AI Architect</title>
     <style>
-        /* CSS Reset & Dark Mode */
+        /* Base Styles (Dark Mode, Mobile First) */
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, sans-serif; }
         html, body { background-color: #0f0f0f; color: #ffffff; height: 100vh; height: -webkit-fill-available; width: 100vw; overflow: hidden; position: relative; }
         
-        /* Sidebar, Header, Chat Area */
         .sidebar { position: fixed; top: 0; left: 0; width: 80%; max-width: 320px; height: 100%; background: #171717; z-index: 20; transform: translateX(-100%); transition: transform 0.3s ease; display: flex; flex-direction: column; padding: 20px; border-right: 1px solid #222; }
         .sidebar.open { transform: translateX(0); }
         .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 15; display: none; }
@@ -17,13 +16,11 @@
         .search-bar { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #333; background: #222; color: #fff; margin-bottom: 20px; }
         .session-list { flex-grow: 1; overflow-y: auto; }
         .session-item { padding: 12px; border-bottom: 1px solid #222; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .session-item:hover { background: #222; }
         .delete-btn { color: #ff4444; cursor: pointer; font-size: 14px; }
         .sidebar-footer { border-top: 1px solid #222; padding-top: 15px; display: flex; justify-content: space-between; align-items: center; }
         .username { font-size: 14px; font-weight: 500; }
         .settings-btn { font-size: 20px; cursor: pointer; color: #888; }
 
-        /* Main App Container */
         .app-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0f0f0f; z-index: 10; display: flex; flex-direction: column; transition: transform 0.3s ease; }
         .app-container.sidebar-open { transform: translateX(80%); } 
 
@@ -48,15 +45,7 @@
         .message-row.ai { justify-content: flex-start; }
         .message-bubble { max-width: 80%; padding: 10px 15px; border-radius: 12px; font-size: 15px; line-height: 1.5; }
         .message-bubble.user { background: #2b2b2b; color: #fff; border-bottom-right-radius: 4px; }
-        
-        /* ✅ AI Bubble - white-space: pre-wrap ထည့်ထားပြီး textContent နဲ့ အဆင်ပြေအောင် */
-        .message-bubble.ai { 
-            background: #1a1a1a; 
-            border: 1px solid #333; 
-            color: #e0e0e0; 
-            border-bottom-left-radius: 4px;
-            white-space: pre-wrap; 
-        }
+        .message-bubble.ai { background: #1a1a1a; border: 1px solid #333; color: #e0e0e0; border-bottom-left-radius: 4px; white-space: pre-wrap; }
         .ai-actions { margin-top: 5px; display: flex; gap: 10px; font-size: 12px; color: #888; }
         .ai-actions span { cursor: pointer; user-select: none; }
         
@@ -75,16 +64,98 @@
         .toggle-switch.on::after { left: 16px; }
         .send-btn { width: 32px; height: 32px; border-radius: 50%; background: #4a90e2; border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; flex-shrink: 0; }
         .hidden { display: none !important; }
+
+        /* Project Guardian Controls */
+        .pg-controls { display: flex; gap: 8px; margin-bottom: 5px; flex-wrap: wrap; }
+        .pg-btn { padding: 4px 12px; border-radius: 12px; border: 1px solid #444; background: #1a1a1a; color: #aaa; font-size: 12px; cursor: pointer; transition: 0.2s; }
+        .pg-btn.active { border-color: #4a90e2; color: #4a90e2; }
+        .pg-btn.locked { border-color: #4a90e2; background: #2a3a5a; color: #fff; }
+
+        /* Toast Alert System */
+        .toast-container { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 200; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+        .toast-item { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: slideIn 0.3s ease; pointer-events: auto; display: flex; justify-content: space-between; align-items: center; }
+        .toast-item.error { border-color: #ff4444; background: #2a1a1a; }
+        .toast-item.warning { border-color: #ffa500; background: #2a2a1a; }
+        .toast-close { cursor: pointer; color: #888; font-size: 16px; margin-left: 10px; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Settings Modal */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; display: none; justify-content: center; align-items: center; }
+        .modal-overlay.open { display: flex; }
+        .modal-content { background: #1e1e1e; width: 90%; max-width: 400px; border-radius: 16px; padding: 20px; border: 1px solid #333; max-height: 80vh; overflow-y: auto; }
+        .modal-title { font-size: 20px; font-weight: bold; margin-bottom: 15px; }
+        .modal-close { float: right; cursor: pointer; color: #aaa; }
+        .settings-group { margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .settings-group label { font-size: 14px; display: block; margin-bottom: 5px; color: #aaa; }
+        .settings-group .key-input-wrap { display: flex; gap: 8px; margin-bottom: 6px; align-items: center; }
+        .settings-group .key-input-wrap input { flex-grow: 1; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff; }
+        .settings-group .key-input-wrap button { padding: 4px 10px; border-radius: 6px; border: none; color: #fff; cursor: pointer; font-size: 14px; }
+        .btn-add-key { background: #4a90e2; }
+        .btn-remove-key { background: #ff4444; }
+        .key-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+        .key-tag { background: #2a2a2a; border: 1px solid #444; padding: 2px 8px; border-radius: 12px; font-size: 12px; color: #aaa; display: flex; align-items: center; gap: 5px; }
+        .key-tag span { cursor: pointer; color: #ff4444; }
     </style>
 </head>
 <body>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="toggleSettings()">✕</span>
+            <div class="modal-title">🔑 API Keys & Configuration</div>
+            <p style="font-size: 12px; color: #888; margin-bottom: 15px;">Keys stored in browser localStorage.</p>
+            
+            <div id="settingsContainer">
+                <!-- Dynamic provider keys -->
+            </div>
+
+            <div class="settings-group" style="border-bottom: none;">
+                <label style="font-weight: bold;">⚙️ Project Guardian (PG) Engine</label>
+                <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+                    <select id="pgProvider" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff;">
+                        <option value="gemini">Gemini</option>
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="github">GitHub Models</option>
+                        <option value="groq">Groq</option>
+                        <option value="openrouter">OpenRouter</option>
+                    </select>
+                    <select id="pgKey" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff;">
+                        <option value="">Select Key...</option>
+                    </select>
+                </div>
+                <div style="font-size: 12px; color: #888; margin-top: 4px;">Select which API key to use for PG summary generation.</div>
+            </div>
+
+            <div class="settings-group" style="border-bottom: none;">
+                <label style="font-weight: bold;">⚖️ Justice AI Engine</label>
+                <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+                    <select id="justiceProvider" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff;">
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="gemini">Gemini</option>
+                        <option value="github">GitHub Models</option>
+                        <option value="groq">Groq</option>
+                        <option value="openrouter">OpenRouter</option>
+                    </select>
+                    <select id="justiceKey" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff;">
+                        <option value="">Select Key...</option>
+                    </select>
+                </div>
+                <div style="font-size: 12px; color: #888; margin-top: 4px;">Select which API key to use for Justice AI (Recommendation mode).</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Sidebar & Overlay -->
     <div class="sidebar" id="sidebar">
         <input type="text" class="search-bar" placeholder="Search sessions...">
         <div class="session-list" id="sessionList"></div>
         <div class="sidebar-footer">
             <span class="username">CEO User</span>
-            <span class="settings-btn">•••</span>
+            <span class="settings-btn" onclick="toggleSettings()">•••</span>
         </div>
     </div>
     <div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
@@ -115,12 +186,17 @@
         <div class="input-area">
             <div class="input-container">
                 <div class="input-top-row">
+                    <div class="pg-controls" id="pgControls">
+                        <button class="pg-btn" id="btnLock" onclick="lockPlan()">🔒 Lock Plan</button>
+                        <button class="pg-btn" id="btnSync" onclick="syncPhase()">🔄 Sync / Next Phase</button>
+                        <button class="pg-btn" id="btnEdit" onclick="editPlan()">🔓 Edit Plan</button>
+                    </div>
                     <textarea id="chatInput" rows="1" placeholder="Type a message or hold to speak"></textarea>
                 </div>
                 <div class="input-bottom-row">
                     <div class="bottom-left">
                         <button class="action-icon-btn" onclick="document.getElementById('fileInput').click()">+</button>
-                        <input type="file" id="fileInput" style="display:none" accept="image/*, .pdf, .txt">
+                        <input type="file" id="fileInput" style="display:none">
                     </div>
                     <div class="bottom-right">
                         <div class="debate-toggle" onclick="toggleDebate()">
@@ -135,13 +211,193 @@
     </div>
 
     <script>
+        // State
         let isDebateOn = false;
         let currentMode = 'General';
+        
+        // All available providers
+        const PROVIDERS = ['deepseek', 'gemini', 'github', 'groq', 'openrouter'];
+        
+        // PG State Management
+        let pgState = JSON.parse(localStorage.getItem('pg_state')) || { 
+            locked: false, 
+            coreSpec: '', 
+            progress: [], 
+            activeFocus: '' 
+        };
 
+        // ------------- API Key Management (Multi-Key Support) -------------
+        function loadSettingsUI() {
+            const container = document.getElementById('settingsContainer');
+            container.innerHTML = '';
+            
+            PROVIDERS.forEach(provider => {
+                const keys = JSON.parse(localStorage.getItem(`keys_${provider}`)) || [];
+                const div = document.createElement('div');
+                div.className = 'settings-group';
+                
+                let label = provider.charAt(0).toUpperCase() + provider.slice(1);
+                if(provider === 'github') label = 'GitHub Models';
+                if(provider === 'openrouter') label = 'OpenRouter';
+                
+                div.innerHTML = `
+                    <label>${label}</label>
+                    <div class="key-input-wrap">
+                        <input type="password" id="input_${provider}" placeholder="Enter Key...">
+                        <button class="btn-add-key" onclick="addKey('${provider}')">+ Add</button>
+                    </div>
+                    <div class="key-list" id="list_${provider}">
+                        ${keys.map((k, i) => `<span class="key-tag">${k.substring(0, 8)}... <span onclick="removeKey('${provider}', ${i})">✕</span></span>`).join('')}
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+
+            // Populate Engine Selectors
+            updateSelectorOptions();
+        }
+
+        function addKey(provider) {
+            const input = document.getElementById(`input_${provider}`);
+            const val = input.value.trim();
+            if(!val) return;
+            
+            let keys = JSON.parse(localStorage.getItem(`keys_${provider}`)) || [];
+            keys.push(val);
+            localStorage.setItem(`keys_${provider}`, JSON.stringify(keys));
+            input.value = '';
+            loadSettingsUI();
+        }
+
+        function removeKey(provider, index) {
+            let keys = JSON.parse(localStorage.getItem(`keys_${provider}`)) || [];
+            keys.splice(index, 1);
+            localStorage.setItem(`keys_${provider}`, JSON.stringify(keys));
+            loadSettingsUI();
+        }
+
+        function updateSelectorOptions() {
+            const pgProvider = document.getElementById('pgProvider');
+            const pgKey = document.getElementById('pgKey');
+            const justiceProvider = document.getElementById('justiceProvider');
+            const justiceKey = document.getElementById('justiceKey');
+
+            // Update Key dropdowns based on selected provider
+            const updateKeyDropdown = (providerSelect, keySelect) => {
+                const provider = providerSelect.value;
+                const keys = JSON.parse(localStorage.getItem(`keys_${provider}`)) || [];
+                keySelect.innerHTML = keys.map(k => `<option value="${k}">${k.substring(0, 8)}...</option>`).join('');
+                if(keys.length === 0) keySelect.innerHTML = '<option value="">No keys available</option>';
+            };
+
+            pgProvider.onchange = () => updateKeyDropdown(pgProvider, pgKey);
+            justiceProvider.onchange = () => updateKeyDropdown(justiceProvider, justiceKey);
+
+            // Initial load
+            updateKeyDropdown(pgProvider, pgKey);
+            updateKeyDropdown(justiceProvider, justiceKey);
+        }
+
+        function getApiKeysPayload() {
+            const payload = {};
+            PROVIDERS.forEach(provider => {
+                const keys = JSON.parse(localStorage.getItem(`keys_${provider}`)) || [];
+                if(keys.length > 0) payload[provider] = keys;
+            });
+            return payload;
+        }
+
+        function getPGSelector() {
+            const provider = document.getElementById('pgProvider').value;
+            const key = document.getElementById('pgKey').value;
+            return { provider, key };
+        }
+
+        function getJusticeSelector() {
+            const provider = document.getElementById('justiceProvider').value;
+            const key = document.getElementById('justiceKey').value;
+            return { provider, key };
+        }
+
+        // ------------- Toast Alert System (New) -------------
+        function showToast(message, type = 'warning') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast-item ${type}`;
+            toast.innerHTML = `
+                <span>${message}</span>
+                <span class="toast-close" onclick="this.parentElement.remove()">✕</span>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => { if(toast.parentElement) toast.remove(); }, 8000);
+        }
+
+        // ------------- PG Logic (Manual Controls) -------------
+        function updatePGUI() {
+            const btnLock = document.getElementById('btnLock');
+            const btnSync = document.getElementById('btnSync');
+            const btnEdit = document.getElementById('btnEdit');
+            
+            if(pgState.locked) {
+                btnLock.className = 'pg-btn locked';
+                btnLock.textContent = '🔒 Plan Locked';
+                btnSync.disabled = false;
+                btnEdit.disabled = false;
+            } else {
+                btnLock.className = 'pg-btn';
+                btnLock.textContent = '🔒 Lock Plan';
+                btnSync.disabled = true;
+                btnEdit.disabled = true;
+            }
+        }
+
+        function lockPlan() {
+            if(pgState.locked) return;
+            pgState.locked = true;
+            pgState.activeFocus = 'Phase 1: Initial Setup';
+            localStorage.setItem('pg_state', JSON.stringify(pgState));
+            updatePGUI();
+            showToast('🔒 Plan Locked! AI will now remember this core specification.', 'success');
+        }
+
+        function syncPhase() {
+            if(!pgState.locked) return;
+            const newPhase = prompt("Enter the next phase name (e.g., Phase 2: Database):");
+            if(!newPhase) return;
+            
+            if(pgState.activeFocus) {
+                pgState.progress.push(pgState.activeFocus);
+            }
+            pgState.activeFocus = newPhase;
+            localStorage.setItem('pg_state', JSON.stringify(pgState));
+            updatePGUI();
+            showToast(`🔄 Synced! Moved to: ${newPhase}`, 'success');
+        }
+
+        function editPlan() {
+            if(!pgState.locked) return;
+            if(confirm("Are you sure you want to unlock the plan? This will reset progress.")) {
+                pgState.locked = false;
+                pgState.coreSpec = '';
+                pgState.progress = [];
+                pgState.activeFocus = '';
+                localStorage.setItem('pg_state', JSON.stringify(pgState));
+                updatePGUI();
+                showToast('🔓 Plan unlocked. You can now re-plan.', 'warning');
+            }
+        }
+
+        // ------------- Core UI Functions -------------
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('open');
             document.getElementById('overlay').classList.toggle('open');
             document.getElementById('appContainer').classList.toggle('sidebar-open');
+        }
+
+        function toggleSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.classList.toggle('open');
+            if(modal.classList.contains('open')) loadSettingsUI();
         }
 
         function setMode(mode) {
@@ -159,9 +415,7 @@
             document.getElementById('emptyState').style.display = 'flex';
             document.getElementById('chatInput').value = '';
             document.getElementById('chatInput').style.height = 'auto'; 
-            if(document.getElementById('sidebar').classList.contains('open')) {
-                toggleSidebar();
-            }
+            if(document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
         }
 
         function toggleDebate() {
@@ -186,6 +440,7 @@
             }
         });
 
+        // ------------- Send Message Logic -------------
         async function sendMessage() {
             const input = document.getElementById('chatInput').value;
             if(!input.trim()) return;
@@ -194,8 +449,8 @@
             document.getElementById('activeChat').style.display = 'flex';
 
             const chatContainer = document.getElementById('activeChat');
-
-            // ✅ User Message - innerHTML အစား DOM element နဲ့ textContent သုံးပြီး XSS ကာကွယ်ထားတယ်
+            
+            // User Message
             const userMsgDiv = document.createElement('div');
             userMsgDiv.className = 'message-row user';
             const userBubble = document.createElement('div');
@@ -204,7 +459,7 @@
             userMsgDiv.appendChild(userBubble);
             chatContainer.appendChild(userMsgDiv);
 
-            // Loading Indicator
+            // Loading
             const loadingDiv = document.createElement('div');
             loadingDiv.className = 'message-row ai';
             loadingDiv.id = 'loadingMsg';
@@ -215,15 +470,22 @@
             chatContainer.appendChild(loadingDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
-            // ✅ Cold Start Logic (Timeout 60s, Wake-up Alert at 15s)
+            const apiKeys = getApiKeysPayload();
+            if(Object.keys(apiKeys).length === 0) {
+                document.getElementById('loadingMsg').remove();
+                showToast('⚠️ Please add at least one API Key in Settings (•••).', 'error');
+                return;
+            }
+
+            const pgSelector = getPGSelector();
+            const justiceSelector = getJusticeSelector();
+
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds
+            const timeoutId = setTimeout(() => controller.abort(), 60000);
             let wakeUpTimer = setTimeout(() => {
                 const loadMsg = document.getElementById('loadingMsg');
-                if(loadMsg) {
-                    loadMsg.querySelector('.message-bubble.ai').textContent = '⏳ Server is waking up from sleep... please wait.';
-                }
-            }, 15000); // 15 seconds
+                if(loadMsg) loadMsg.querySelector('.message-bubble.ai').textContent = '⏳ Server is waking up... please wait.';
+            }, 15000);
 
             try {
                 const response = await fetch('/api/chat', {
@@ -232,7 +494,11 @@
                     body: JSON.stringify({
                         mode: currentMode,
                         message: input,
-                        debateOn: isDebateOn
+                        debateOn: isDebateOn,
+                        apiKeys: apiKeys,
+                        pgState: pgState,
+                        pgSelector: pgSelector,
+                        justiceSelector: justiceSelector
                     }),
                     signal: controller.signal
                 });
@@ -240,25 +506,26 @@
                 clearTimeout(wakeUpTimer);
                 
                 const data = await response.json();
-                
                 document.getElementById('loadingMsg').remove();
 
-                // ✅ AI Response - DOM Element ဆောက်ပြီး dataset.text နဲ့ သိမ်းတယ် (Data injection လုံခြုံအောင်)
+                // Check for error alerts from backend
+                if(data.response && data.response.includes('Error:')) {
+                    showToast(data.response, 'error');
+                }
+
+                // AI Response
                 const aiMsgDiv = document.createElement('div');
                 aiMsgDiv.className = 'message-row ai';
-
                 const aiBubble = document.createElement('div');
                 aiBubble.className = 'message-bubble ai';
-                aiBubble.textContent = data.response; // textContent သုံးပြီး HTML တွေကို ကာကွယ်ထားတယ်
+                aiBubble.textContent = data.response;
 
                 const actionsDiv = document.createElement('div');
                 actionsDiv.className = 'ai-actions';
-
                 const copySpan = document.createElement('span');
                 copySpan.className = 'copy-btn';
                 copySpan.textContent = '📋 Copy';
-                copySpan.dataset.text = data.response; // ✅ HTML Attribute bug ကို dataset နဲ့ ဖြေရှင်းပြီး
-
+                copySpan.dataset.text = data.response;
                 const downloadSpan = document.createElement('span');
                 downloadSpan.textContent = '📥 Download';
                 downloadSpan.onclick = () => alert('Download started!');
@@ -275,15 +542,21 @@
                 clearTimeout(wakeUpTimer);
                 document.getElementById('loadingMsg').remove();
                 if (error.name === 'AbortError') {
-                    alert('❌ Request timed out. Server took too long to wake up. Please try again.');
+                    showToast('❌ Request timed out. Server took too long to wake up. Please try again.', 'error');
                 } else {
-                    alert('Error connecting to backend');
+                    showToast('Error connecting to backend: ' + error.message, 'error');
                 }
             }
 
             document.getElementById('chatInput').value = '';
             document.getElementById('chatInput').style.height = 'auto';
         }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updatePGUI();
+            loadSettingsUI();
+        });
     </script>
 </body>
 </html>
