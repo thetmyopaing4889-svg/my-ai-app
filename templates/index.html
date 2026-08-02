@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AI Architect</title>
     <style>
-        /* Base Styles (Dark Mode, Mobile First) */
+        /* Base Styles */
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, sans-serif; }
         html, body { background-color: #0f0f0f; color: #ffffff; height: 100vh; height: -webkit-fill-available; width: 100vw; overflow: hidden; position: relative; }
         
@@ -49,38 +49,59 @@
         .ai-actions { margin-top: 5px; display: flex; gap: 10px; font-size: 12px; color: #888; }
         .ai-actions span { cursor: pointer; user-select: none; }
         
-        .input-area { position: relative; width: 100%; padding: 10px 15px; padding-bottom: max(15px, env(safe-area-inset-bottom)); background: #0f0f0f; border-top: 1px solid #222; display: flex; align-items: flex-end; gap: 12px; z-index: 10; }
-        .input-container { flex-grow: 1; display: flex; flex-direction: column; background: #1e1e1e; border-radius: 24px; padding: 14px 16px; border: 1px solid #333; min-height: 60px; justify-content: space-between; }
-        .input-top-row { display: flex; align-items: flex-end; width: 100%; }
-        .input-top-row textarea { flex-grow: 1; background: transparent; border: none; color: #fff; outline: none; font-size: 16px; padding: 0; resize: none; overflow: hidden; min-height: 24px; max-height: 100px; line-height: 1.5; width: 100%; font-family: inherit; align-self: flex-end; margin-top: 2px; }
-        .input-bottom-row { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
-        .bottom-left { display: flex; align-items: center; gap: 10px; }
-        .bottom-right { display: flex; align-items: center; gap: 10px; }
-        .action-icon-btn { background: transparent; border: none; color: #888; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+        /* ✨ Input Area - ပြန်ပြင်ပြီးသား Layout */
+        .input-area { 
+            position: relative; 
+            width: 100%; 
+            padding: 10px 15px; 
+            padding-bottom: max(15px, env(safe-area-inset-bottom));
+            background: #0f0f0f; 
+            border-top: 1px solid #222; 
+            display: flex; 
+            align-items: flex-end; 
+            gap: 10px; 
+            z-index: 10; 
+        }
+        /* + ခလုတ်ကို အပြင်ဘက်မှာ ထားဖို့ */
+        .attach-outside {
+            width: 32px; height: 32px; border-radius: 50%; background: transparent; border: none;
+            color: #888; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; margin-bottom: 5px;
+        }
+        .input-container { 
+            flex-grow: 1; 
+            display: flex; 
+            flex-direction: column; 
+            background: #1e1e1e; 
+            border-radius: 24px; 
+            padding: 10px 16px; 
+            border: 1px solid #333; 
+            min-height: 60px; 
+        }
+        .input-top-row { display: flex; width: 100%; }
+        .input-top-row textarea { 
+            flex-grow: 1; background: transparent; border: none; color: #fff; outline: none; font-size: 16px; padding: 0; resize: none; overflow: hidden; min-height: 24px; max-height: 100px; line-height: 1.5; width: 100%; font-family: inherit; margin-top: 2px;
+        }
+        .input-bottom-row { display: flex; align-items: center; justify-content: flex-end; margin-top: 8px; width: 100%; gap: 10px; }
+
+        /* PG Controls (Lock, Sync, Edit) ကို ထည့်ထားပြီ */
+        .pg-controls { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; width: 100%; }
+        .pg-btn { padding: 4px 12px; border-radius: 12px; border: 1px solid #444; background: #1a1a1a; color: #aaa; font-size: 12px; cursor: pointer; transition: 0.2s; }
+        .pg-btn.active { border-color: #4a90e2; color: #4a90e2; }
+        .pg-btn.locked { border-color: #4a90e2; background: #2a3a5a; color: #fff; }
+
+        /* Debate Toggle */
         .debate-toggle { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #888; cursor: pointer; }
         .toggle-switch { width: 30px; height: 16px; background: #333; border-radius: 10px; position: relative; cursor: pointer; transition: 0.2s; }
         .toggle-switch.on { background: #4a90e2; }
         .toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: #fff; border-radius: 50%; transition: 0.2s; }
         .toggle-switch.on::after { left: 16px; }
+        
         .send-btn { width: 32px; height: 32px; border-radius: 50%; background: #4a90e2; border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; flex-shrink: 0; }
         .hidden { display: none !important; }
 
-        /* Project Guardian Controls */
-        .pg-controls { display: flex; gap: 8px; margin-bottom: 5px; flex-wrap: wrap; }
-        .pg-btn { padding: 4px 12px; border-radius: 12px; border: 1px solid #444; background: #1a1a1a; color: #aaa; font-size: 12px; cursor: pointer; transition: 0.2s; }
-        .pg-btn.active { border-color: #4a90e2; color: #4a90e2; }
-        .pg-btn.locked { border-color: #4a90e2; background: #2a3a5a; color: #fff; }
-
-        /* Toast Alert System */
-        .toast-container { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 200; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
-        .toast-item { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: slideIn 0.3s ease; pointer-events: auto; display: flex; justify-content: space-between; align-items: center; }
-        .toast-item.error { border-color: #ff4444; background: #2a1a1a; }
-        .toast-item.warning { border-color: #ffa500; background: #2a2a1a; }
-        .toast-close { cursor: pointer; color: #888; font-size: 16px; margin-left: 10px; }
-        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* Settings Modal */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; display: none; justify-content: center; align-items: center; }
+        /* Settings Modal (z-index မြှင့်ထားတယ်) */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 999; display: none; justify-content: center; align-items: center; }
         .modal-overlay.open { display: flex; }
         .modal-content { background: #1e1e1e; width: 90%; max-width: 400px; border-radius: 16px; padding: 20px; border: 1px solid #333; max-height: 80vh; overflow-y: auto; }
         .modal-title { font-size: 20px; font-weight: bold; margin-bottom: 15px; }
@@ -95,6 +116,14 @@
         .key-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
         .key-tag { background: #2a2a2a; border: 1px solid #444; padding: 2px 8px; border-radius: 12px; font-size: 12px; color: #aaa; display: flex; align-items: center; gap: 5px; }
         .key-tag span { cursor: pointer; color: #ff4444; }
+
+        /* Toast Alert */
+        .toast-container { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 200; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+        .toast-item { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: slideIn 0.3s ease; pointer-events: auto; display: flex; justify-content: space-between; align-items: center; }
+        .toast-item.error { border-color: #ff4444; background: #2a1a1a; }
+        .toast-item.warning { border-color: #ffa500; background: #2a2a1a; }
+        .toast-close { cursor: pointer; color: #888; font-size: 16px; margin-left: 10px; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
@@ -108,10 +137,7 @@
             <span class="modal-close" onclick="toggleSettings()">✕</span>
             <div class="modal-title">🔑 API Keys & Configuration</div>
             <p style="font-size: 12px; color: #888; margin-bottom: 15px;">Keys stored in browser localStorage.</p>
-            
-            <div id="settingsContainer">
-                <!-- Dynamic provider keys -->
-            </div>
+            <div id="settingsContainer"></div>
 
             <div class="settings-group" style="border-bottom: none;">
                 <label style="font-weight: bold;">⚙️ Project Guardian (PG) Engine</label>
@@ -127,7 +153,6 @@
                         <option value="">Select Key...</option>
                     </select>
                 </div>
-                <div style="font-size: 12px; color: #888; margin-top: 4px;">Select which API key to use for PG summary generation.</div>
             </div>
 
             <div class="settings-group" style="border-bottom: none;">
@@ -144,7 +169,6 @@
                         <option value="">Select Key...</option>
                     </select>
                 </div>
-                <div style="font-size: 12px; color: #888; margin-top: 4px;">Select which API key to use for Justice AI (Recommendation mode).</div>
             </div>
         </div>
     </div>
@@ -183,28 +207,27 @@
             <div class="active-chat" id="activeChat"></div>
         </div>
 
+        <!-- ✨ Input Area (ပြန်ပြင်ပြီးသား) -->
         <div class="input-area">
+            <button class="attach-outside" onclick="document.getElementById('fileInput').click()">+</button>
+            <input type="file" id="fileInput" style="display:none">
+
             <div class="input-container">
+                <!-- ✅ Lock/Edit/Sync ခလုတ်တွေ ဒီမှာရှိပါတယ် -->
+                <div class="pg-controls" id="pgControls">
+                    <button class="pg-btn" id="btnLock" onclick="lockPlan()">🔒 Lock Plan</button>
+                    <button class="pg-btn" id="btnSync" onclick="syncPhase()">🔄 Sync / Next Phase</button>
+                    <button class="pg-btn" id="btnEdit" onclick="editPlan()">🔓 Edit Plan</button>
+                </div>
                 <div class="input-top-row">
-                    <div class="pg-controls" id="pgControls">
-                        <button class="pg-btn" id="btnLock" onclick="lockPlan()">🔒 Lock Plan</button>
-                        <button class="pg-btn" id="btnSync" onclick="syncPhase()">🔄 Sync / Next Phase</button>
-                        <button class="pg-btn" id="btnEdit" onclick="editPlan()">🔓 Edit Plan</button>
-                    </div>
                     <textarea id="chatInput" rows="1" placeholder="Type a message or hold to speak"></textarea>
                 </div>
                 <div class="input-bottom-row">
-                    <div class="bottom-left">
-                        <button class="action-icon-btn" onclick="document.getElementById('fileInput').click()">+</button>
-                        <input type="file" id="fileInput" style="display:none">
+                    <div class="debate-toggle" onclick="toggleDebate()">
+                        <span>Debate</span>
+                        <div class="toggle-switch" id="debateSwitch"></div>
                     </div>
-                    <div class="bottom-right">
-                        <div class="debate-toggle" onclick="toggleDebate()">
-                            <span>Debate</span>
-                            <div class="toggle-switch" id="debateSwitch"></div>
-                        </div>
-                        <button class="send-btn" onclick="sendMessage()">➤</button>
-                    </div>
+                    <button class="send-btn" onclick="sendMessage()">➤</button>
                 </div>
             </div>
         </div>
@@ -214,32 +237,29 @@
         // State
         let isDebateOn = false;
         let currentMode = 'General';
-        
-        // All available providers
         const PROVIDERS = ['deepseek', 'gemini', 'github', 'groq', 'openrouter'];
-        
-        // PG State Management
-        let pgState = JSON.parse(localStorage.getItem('pg_state')) || { 
-            locked: false, 
-            coreSpec: '', 
-            progress: [], 
-            activeFocus: '' 
-        };
+        let pgState = JSON.parse(localStorage.getItem('pg_state')) || { locked: false, coreSpec: '', progress: [], activeFocus: '' };
 
-        // ------------- API Key Management (Multi-Key Support) -------------
+        // ------------- Settings Modal -------------
+        function toggleSettings() {
+            const modal = document.getElementById('settingsModal');
+            if(!modal) return;
+            modal.classList.toggle('open');
+            if(modal.classList.contains('open')) {
+                try { loadSettingsUI(); } catch(e) { console.error(e); }
+            }
+        }
+
         function loadSettingsUI() {
             const container = document.getElementById('settingsContainer');
             container.innerHTML = '';
-            
             PROVIDERS.forEach(provider => {
                 const keys = JSON.parse(localStorage.getItem(`keys_${provider}`)) || [];
-                const div = document.createElement('div');
-                div.className = 'settings-group';
-                
                 let label = provider.charAt(0).toUpperCase() + provider.slice(1);
                 if(provider === 'github') label = 'GitHub Models';
                 if(provider === 'openrouter') label = 'OpenRouter';
-                
+                const div = document.createElement('div');
+                div.className = 'settings-group';
                 div.innerHTML = `
                     <label>${label}</label>
                     <div class="key-input-wrap">
@@ -252,8 +272,6 @@
                 `;
                 container.appendChild(div);
             });
-
-            // Populate Engine Selectors
             updateSelectorOptions();
         }
 
@@ -261,7 +279,6 @@
             const input = document.getElementById(`input_${provider}`);
             const val = input.value.trim();
             if(!val) return;
-            
             let keys = JSON.parse(localStorage.getItem(`keys_${provider}`)) || [];
             keys.push(val);
             localStorage.setItem(`keys_${provider}`, JSON.stringify(keys));
@@ -281,19 +298,14 @@
             const pgKey = document.getElementById('pgKey');
             const justiceProvider = document.getElementById('justiceProvider');
             const justiceKey = document.getElementById('justiceKey');
-
-            // Update Key dropdowns based on selected provider
             const updateKeyDropdown = (providerSelect, keySelect) => {
                 const provider = providerSelect.value;
                 const keys = JSON.parse(localStorage.getItem(`keys_${provider}`)) || [];
                 keySelect.innerHTML = keys.map(k => `<option value="${k}">${k.substring(0, 8)}...</option>`).join('');
                 if(keys.length === 0) keySelect.innerHTML = '<option value="">No keys available</option>';
             };
-
             pgProvider.onchange = () => updateKeyDropdown(pgProvider, pgKey);
             justiceProvider.onchange = () => updateKeyDropdown(justiceProvider, justiceKey);
-
-            // Initial load
             updateKeyDropdown(pgProvider, pgKey);
             updateKeyDropdown(justiceProvider, justiceKey);
         }
@@ -308,96 +320,67 @@
         }
 
         function getPGSelector() {
-            const provider = document.getElementById('pgProvider').value;
-            const key = document.getElementById('pgKey').value;
-            return { provider, key };
+            return { provider: document.getElementById('pgProvider').value, key: document.getElementById('pgKey').value };
         }
-
         function getJusticeSelector() {
-            const provider = document.getElementById('justiceProvider').value;
-            const key = document.getElementById('justiceKey').value;
-            return { provider, key };
+            return { provider: document.getElementById('justiceProvider').value, key: document.getElementById('justiceKey').value };
         }
 
-        // ------------- Toast Alert System (New) -------------
+        // ------------- Toast Alert -------------
         function showToast(message, type = 'warning') {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
             toast.className = `toast-item ${type}`;
-            toast.innerHTML = `
-                <span>${message}</span>
-                <span class="toast-close" onclick="this.parentElement.remove()">✕</span>
-            `;
+            toast.innerHTML = `<span>${message}</span><span class="toast-close" onclick="this.parentElement.remove()">✕</span>`;
             container.appendChild(toast);
             setTimeout(() => { if(toast.parentElement) toast.remove(); }, 8000);
         }
 
-        // ------------- PG Logic (Manual Controls) -------------
+        // ------------- PG Logic -------------
         function updatePGUI() {
             const btnLock = document.getElementById('btnLock');
             const btnSync = document.getElementById('btnSync');
             const btnEdit = document.getElementById('btnEdit');
-            
             if(pgState.locked) {
-                btnLock.className = 'pg-btn locked';
-                btnLock.textContent = '🔒 Plan Locked';
-                btnSync.disabled = false;
-                btnEdit.disabled = false;
+                btnLock.className = 'pg-btn locked'; btnLock.textContent = '🔒 Plan Locked';
+                btnSync.disabled = false; btnEdit.disabled = false;
             } else {
-                btnLock.className = 'pg-btn';
-                btnLock.textContent = '🔒 Lock Plan';
-                btnSync.disabled = true;
-                btnEdit.disabled = true;
+                btnLock.className = 'pg-btn'; btnLock.textContent = '🔒 Lock Plan';
+                btnSync.disabled = true; btnEdit.disabled = true;
             }
         }
 
         function lockPlan() {
             if(pgState.locked) return;
-            pgState.locked = true;
-            pgState.activeFocus = 'Phase 1: Initial Setup';
-            localStorage.setItem('pg_state', JSON.stringify(pgState));
-            updatePGUI();
-            showToast('🔒 Plan Locked! AI will now remember this core specification.', 'success');
+            pgState.locked = true; pgState.activeFocus = 'Phase 1: Initial Setup';
+            localStorage.setItem('pg_state', JSON.stringify(pgState)); updatePGUI();
+            showToast('🔒 Plan Locked! AI will remember the core spec.', 'success');
         }
 
         function syncPhase() {
             if(!pgState.locked) return;
-            const newPhase = prompt("Enter the next phase name (e.g., Phase 2: Database):");
+            const newPhase = prompt("Enter the next phase name:");
             if(!newPhase) return;
-            
-            if(pgState.activeFocus) {
-                pgState.progress.push(pgState.activeFocus);
-            }
+            if(pgState.activeFocus) pgState.progress.push(pgState.activeFocus);
             pgState.activeFocus = newPhase;
-            localStorage.setItem('pg_state', JSON.stringify(pgState));
-            updatePGUI();
+            localStorage.setItem('pg_state', JSON.stringify(pgState)); updatePGUI();
             showToast(`🔄 Synced! Moved to: ${newPhase}`, 'success');
         }
 
         function editPlan() {
             if(!pgState.locked) return;
-            if(confirm("Are you sure you want to unlock the plan? This will reset progress.")) {
-                pgState.locked = false;
-                pgState.coreSpec = '';
-                pgState.progress = [];
-                pgState.activeFocus = '';
-                localStorage.setItem('pg_state', JSON.stringify(pgState));
-                updatePGUI();
-                showToast('🔓 Plan unlocked. You can now re-plan.', 'warning');
+            if(confirm("Unlock plan and reset progress?")) {
+                pgState.locked = false; pgState.coreSpec = ''; pgState.progress = []; pgState.activeFocus = '';
+                localStorage.setItem('pg_state', JSON.stringify(pgState)); updatePGUI();
+                showToast('🔓 Plan unlocked.', 'warning');
             }
         }
 
-        // ------------- Core UI Functions -------------
+        // ------------- Core UI -------------
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('open');
             document.getElementById('overlay').classList.toggle('open');
             document.getElementById('appContainer').classList.toggle('sidebar-open');
-        }
-
-        function toggleSettings() {
-            const modal = document.getElementById('settingsModal');
-            modal.classList.toggle('open');
-            if(modal.classList.contains('open')) loadSettingsUI();
         }
 
         function setMode(mode) {
@@ -413,8 +396,7 @@
             document.getElementById('activeChat').style.display = 'none';
             document.getElementById('activeChat').innerHTML = '';
             document.getElementById('emptyState').style.display = 'flex';
-            document.getElementById('chatInput').value = '';
-            document.getElementById('chatInput').style.height = 'auto'; 
+            document.getElementById('chatInput').value = ''; document.getElementById('chatInput').style.height = 'auto'; 
             if(document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
         }
 
@@ -424,10 +406,7 @@
         }
 
         const chatInput = document.getElementById('chatInput');
-        chatInput.addEventListener('input', function() {
-            this.style.height = 'auto'; 
-            this.style.height = (this.scrollHeight) + 'px'; 
-        });
+        chatInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; });
 
         document.addEventListener('click', function(e) {
             if (e.target.classList.contains('copy-btn')) {
@@ -440,17 +419,15 @@
             }
         });
 
-        // ------------- Send Message Logic -------------
+        // ------------- Send Message -------------
         async function sendMessage() {
             const input = document.getElementById('chatInput').value;
             if(!input.trim()) return;
 
             document.getElementById('emptyState').style.display = 'none';
             document.getElementById('activeChat').style.display = 'flex';
-
             const chatContainer = document.getElementById('activeChat');
             
-            // User Message
             const userMsgDiv = document.createElement('div');
             userMsgDiv.className = 'message-row user';
             const userBubble = document.createElement('div');
@@ -459,7 +436,6 @@
             userMsgDiv.appendChild(userBubble);
             chatContainer.appendChild(userMsgDiv);
 
-            // Loading
             const loadingDiv = document.createElement('div');
             loadingDiv.className = 'message-row ai';
             loadingDiv.id = 'loadingMsg';
@@ -473,18 +449,15 @@
             const apiKeys = getApiKeysPayload();
             if(Object.keys(apiKeys).length === 0) {
                 document.getElementById('loadingMsg').remove();
-                showToast('⚠️ Please add at least one API Key in Settings (•••).', 'error');
+                showToast('⚠️ Please add at least one API Key in Settings.', 'error');
                 return;
             }
-
-            const pgSelector = getPGSelector();
-            const justiceSelector = getJusticeSelector();
 
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 60000);
             let wakeUpTimer = setTimeout(() => {
                 const loadMsg = document.getElementById('loadingMsg');
-                if(loadMsg) loadMsg.querySelector('.message-bubble.ai').textContent = '⏳ Server is waking up... please wait.';
+                if(loadMsg) loadMsg.querySelector('.message-bubble.ai').textContent = '⏳ Server waking up...';
             }, 15000);
 
             try {
@@ -492,28 +465,18 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        mode: currentMode,
-                        message: input,
-                        debateOn: isDebateOn,
-                        apiKeys: apiKeys,
-                        pgState: pgState,
-                        pgSelector: pgSelector,
-                        justiceSelector: justiceSelector
+                        mode: currentMode, message: input, debateOn: isDebateOn,
+                        apiKeys: apiKeys, pgState: pgState,
+                        pgSelector: getPGSelector(), justiceSelector: getJusticeSelector()
                     }),
                     signal: controller.signal
                 });
-                clearTimeout(timeoutId);
-                clearTimeout(wakeUpTimer);
-                
+                clearTimeout(timeoutId); clearTimeout(wakeUpTimer);
                 const data = await response.json();
                 document.getElementById('loadingMsg').remove();
 
-                // Check for error alerts from backend
-                if(data.response && data.response.includes('Error:')) {
-                    showToast(data.response, 'error');
-                }
+                if(data.response && data.response.includes('Error:')) showToast(data.response, 'error');
 
-                // AI Response
                 const aiMsgDiv = document.createElement('div');
                 aiMsgDiv.className = 'message-row ai';
                 const aiBubble = document.createElement('div');
@@ -523,40 +486,27 @@
                 const actionsDiv = document.createElement('div');
                 actionsDiv.className = 'ai-actions';
                 const copySpan = document.createElement('span');
-                copySpan.className = 'copy-btn';
-                copySpan.textContent = '📋 Copy';
+                copySpan.className = 'copy-btn'; copySpan.textContent = '📋 Copy';
                 copySpan.dataset.text = data.response;
                 const downloadSpan = document.createElement('span');
                 downloadSpan.textContent = '📥 Download';
                 downloadSpan.onclick = () => alert('Download started!');
 
-                actionsDiv.appendChild(copySpan);
-                actionsDiv.appendChild(downloadSpan);
-                aiBubble.appendChild(actionsDiv);
-                aiMsgDiv.appendChild(aiBubble);
+                actionsDiv.appendChild(copySpan); actionsDiv.appendChild(downloadSpan);
+                aiBubble.appendChild(actionsDiv); aiMsgDiv.appendChild(aiBubble);
                 chatContainer.appendChild(aiMsgDiv);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
 
             } catch (error) {
-                clearTimeout(timeoutId);
-                clearTimeout(wakeUpTimer);
+                clearTimeout(timeoutId); clearTimeout(wakeUpTimer);
                 document.getElementById('loadingMsg').remove();
-                if (error.name === 'AbortError') {
-                    showToast('❌ Request timed out. Server took too long to wake up. Please try again.', 'error');
-                } else {
-                    showToast('Error connecting to backend: ' + error.message, 'error');
-                }
+                if (error.name === 'AbortError') showToast('❌ Request timed out.', 'error');
+                else showToast('Error: ' + error.message, 'error');
             }
-
-            document.getElementById('chatInput').value = '';
-            document.getElementById('chatInput').style.height = 'auto';
+            document.getElementById('chatInput').value = ''; document.getElementById('chatInput').style.height = 'auto';
         }
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            updatePGUI();
-            loadSettingsUI();
-        });
+        document.addEventListener('DOMContentLoaded', () => { updatePGUI(); loadSettingsUI(); });
     </script>
 </body>
 </html>
