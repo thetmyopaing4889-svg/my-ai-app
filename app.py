@@ -1,6 +1,7 @@
 import os
 import ipaddress
 import socket
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template
@@ -21,6 +22,7 @@ BUILTIN_PROVIDERS = {
 GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
 MAX_MESSAGE_LENGTH = 100_000
 UPSTREAM_TIMEOUT_SECONDS = 30
+MAX_CONTEXT_RESPONSE_LENGTH = 30_000
 
 
 class AIServiceError(Exception):
@@ -101,6 +103,153 @@ def selector_for(provider_name, selector, api_keys, custom_providers):
         custom_provider = custom_providers[0]
         return "custom", custom_provider["api_key"], custom_provider
     raise ValueError("No AI provider is configured.")
+
+
+def configured_agents(api_keys, custom_providers):
+    """Turn every configured API key/provider into an independently callable agent."""
+    agents = []
+    for provider, keys in api_keys.items():
+        for index, key in enumerate(keys):
+            agents.append({
+                "id": f"{provider}-{index + 1}",
+                "provider": provider,
+                "key": key,
+                "custom": None,
+            })
+    for index, custom_provider in enumerate(custom_providers):
+        agents.append({
+            "id": custom_provider.get("name") or f"custom-{index + 1}",
+            "provider": "custom",
+            "key": custom_provider["api_key"],
+            "custom": custom_provider,
+        })
+    if not agents:
+        raise ValueError("No AI provider is configured.")
+    return agents
+
+
+def clip_text(value, limit=MAX_CONTEXT_RESPONSE_LENGTH):
+    value = str(value or "")
+    if len(value) <= limit:
+        return value
+    return f"{value[:limit]}\n\n[Response truncated for comparison]"
+
+
+def run_agent(agent, prompt):
+    try:
+        response = call_provider(
+            prompt,
+            agent["provider"],
+            agent["key"],
+            agent["custom"],
+        )
+        return {
+            "id": agent["id"],
+            "provider": agent["provider"],
+            "response": clip_text(response),
+            "error": None,
+        }
+    except (ValueError, AIServiceError) as error:
+        return {
+            "id": agent["id"],
+            "provider": agent["provider"],
+            "response": None,
+            "error": str(error),
+        }
+
+
+def run_agents_parallel(agents, prompt):
+    """Ask every configured agent concurrently so one slow provider does not serialize all calls."""
+    results = []
+    with ThreadPoolExecutor(max_workers=len(agents)) as executor:
+        futures = {executor.submit(run_agent, agent, prompt): agent for agent in agents}
+        for future in as_completed(futures):
+            results.append(future.result())
+    results.sort(key=lambda result: result["id"])
+    successful = [result for result in results if result["response"]]
+    if not successful:
+        errors = "; ".join(result["error"] or "Unknown provider error" for result in results)
+        raise AIServiceError(f"All AI agents failed: {errors}")
+    return results
+
+
+def candidate_prompt(question, mode):
+    return (
+        "You are one of several independent AI agents answering the same user request. "
+        "Give your strongest, accurate, practical answer. Do not mention this orchestration "
+        "unless it is relevant to the user's request.\n\n"
+        f"Mode: {mode}\n"
+        f"User request:\n{question}"
+    )
+
+
+def format_agent_answers(results):
+    sections = []
+    for result in results:
+        if result["response"]:
+            sections.append(f"### {result['id']}\n{result['response']}")
+        else:
+            sections.append(f"### {result['id']}\n[Agent failed: {result['error']}]")
+    return "\n\n---\n\n".join(sections)
+
+
+def run_justice_recommendation(question, mode, results, justice_selector, api_keys, custom_providers):
+    justice_provider, justice_key, justice_custom = selector_for(
+        "justice", justice_selector, api_keys, custom_providers
+    )
+    candidate_answers = format_agent_answers(results)
+    prompt = (
+        "You are Justice AI, the impartial evaluator. Several AI agents answered the same "
+        "user request below. Compare their answers for correctness, completeness, safety, "
+        "and usefulness. Recommend the single best answer and provide that recommended answer "
+        "clearly. Do not merely name an agent; explain the important reason briefly, then give "
+        "the best answer the user should use.\n\n"
+        f"User request:\n{question}\n\n"
+        f"Mode: {mode}\n\n"
+        f"Candidate answers:\n{candidate_answers}"
+    )
+    recommendation = call_provider(
+        prompt,
+        justice_provider,
+        justice_key,
+        justice_custom,
+    )
+    return recommendation, candidate_answers
+
+
+def run_peer_debate(question, mode, results, agents, chair_selector, api_keys, custom_providers):
+    candidate_answers = format_agent_answers(results)
+    debate_prompt = (
+        "You are participating in a peer debate with other AI agents. Review all candidate "
+        "answers below against the original user request. Identify mistakes and missing details, "
+        "then propose the strongest corrected answer. Do not defer to a named judge; reason from "
+        "the evidence and produce a concrete improved answer.\n\n"
+        f"Original user request:\n{question}\n\n"
+        f"Mode: {mode}\n\n"
+        f"Candidate answers:\n{candidate_answers}"
+    )
+    debate_results = run_agents_parallel(agents, debate_prompt)
+    debate_answers = format_agent_answers(debate_results)
+
+    # A configured agent chairs the final consensus round; Justice is deliberately not used.
+    chair_provider, chair_key, chair_custom = selector_for(
+        "pg", chair_selector, api_keys, custom_providers
+    )
+    final_prompt = (
+        "You are the chair of a peer AI debate. Produce one final, direct answer to the "
+        "original user request by synthesizing the peer reviews below. Resolve disagreements "
+        "using correctness and usefulness. Return only the final answer and do not mention "
+        "internal orchestration, agents, or voting.\n\n"
+        f"Original user request:\n{question}\n\n"
+        f"Peer reviews:\n{debate_answers}"
+    )
+    final_answer = call_provider(
+        final_prompt,
+        chair_provider,
+        chair_key,
+        chair_custom,
+    )
+    return final_answer, candidate_answers, debate_answers
 
 
 def validate_custom_url(base_url):
@@ -196,28 +345,6 @@ def call_custom_ai(base_url, api_key, model_name, prompt, timeout=UPSTREAM_TIMEO
             raise
         raise AIServiceError("Custom provider request failed.") from e
 
-def execute_debate(prompt, api_keys, custom_providers, pg_selector=None, justice_selector=None):
-    architect_provider, architect_key, architect_custom = selector_for(
-        "pg", pg_selector, api_keys, custom_providers
-    )
-    lead_prompt = f"You are a Senior Software Architect. Provide a comprehensive solution, code, and architecture plan for the following request.\n\nRequest: {prompt}"
-    architect_solution = call_provider(
-        lead_prompt, architect_provider, architect_key, architect_custom
-    )
-
-    skeptic_provider, skeptic_key, skeptic_custom = selector_for(
-        "justice", justice_selector, api_keys, custom_providers
-    )
-    skeptic_prompt = f"You are a Skeptic Agent. Your job is to critically review the solution provided by the Senior Software Architect. Identify edge cases, security flaws, potential bugs, and suggest improvements.\n\nSolution to review:\n{architect_solution}"
-    critique = call_provider(skeptic_prompt, skeptic_provider, skeptic_key, skeptic_custom)
-
-    refine_prompt = f"You are a Senior Software Architect. You received the following critique on your solution. Refine your solution to address the critiques and provide the final optimal answer.\n\nYour Original Solution:\n{architect_solution}\n\nCritique:\n{critique}"
-    final_answer = call_provider(
-        refine_prompt, architect_provider, architect_key, architect_custom
-    )
-
-    return {"architect": architect_solution, "skeptic": critique, "final": final_answer}
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -246,27 +373,57 @@ def chat():
         session_id = f"session_{int(datetime.now().timestamp())}"
 
     try:
-        if mode == "General":
-            base_prompt = "You are a helpful, friendly, and concise AI assistant. Answer clearly and directly."
-            prompt = f"{base_prompt}\n\nUser: {user_message}"
-            provider, key, custom_info = selector_for("general", None, api_keys, custom_providers)
-            ai_reply = call_provider(prompt, provider, key, custom_info)
+        agents = configured_agents(api_keys, custom_providers)
+        initial_results = run_agents_parallel(
+            agents,
+            candidate_prompt(
+                user_message if mode == "General" else (
+                    f"{user_message}\n\nProject context: "
+                    f"{pg_state.get('coreSpec', 'None defined yet')}"
+                ),
+                mode,
+            ),
+        )
+        question_for_judging = user_message
+        if mode == "Professional":
+            question_for_judging = (
+                f"{user_message}\n\nProject context: "
+                f"{pg_state.get('coreSpec', 'None defined yet')}"
+            )
+
+        if mode != "Professional" or not debate_on:
+            recommendation, candidate_answers = run_justice_recommendation(
+                question_for_judging,
+                mode,
+                initial_results,
+                data.get("justiceSelector"),
+                api_keys,
+                custom_providers,
+            )
+            ai_reply = (
+                "## AI Responses\n\n"
+                f"{candidate_answers}\n\n"
+                "---\n\n"
+                "## Justice AI Recommendation\n\n"
+                f"{recommendation}"
+            )
         else:
-            prompt_with_context = f"User Goal: {user_message}\n\nContext: {pg_state.get('coreSpec', 'None defined yet')}"
-            if debate_on:
-                result = execute_debate(
-                    prompt_with_context,
-                    api_keys,
-                    custom_providers,
-                    data.get("pgSelector"),
-                    data.get("justiceSelector"),
-                )
-                ai_reply = f"**Lead Architect's Solution:**\n{result['architect']}\n\n---\n**Skeptic's Critique:**\n{result['skeptic']}\n\n---\n**Final Refined Solution:**\n{result['final']}"
-            else:
-                provider, key, custom_info = selector_for(
-                    "pg", data.get("pgSelector"), api_keys, custom_providers
-                )
-                ai_reply = call_provider(prompt_with_context, provider, key, custom_info)
+            final_answer, candidate_answers, debate_answers = run_peer_debate(
+                question_for_judging,
+                mode,
+                initial_results,
+                agents,
+                data.get("pgSelector"),
+                api_keys,
+                custom_providers,
+            )
+            ai_reply = (
+                "## Peer Debate Result\n\n"
+                f"{final_answer}\n\n"
+                "---\n\n"
+                "## Peer Review Details\n\n"
+                f"{debate_answers}"
+            )
     except ValueError as e:
         return error_response(str(e), 400)
     except AIServiceError as e:

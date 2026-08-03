@@ -797,7 +797,7 @@
             }
 
             const controller = new AbortController();
-             const requestTimeout = currentMode === 'Professional' && isDebateOn ? 120000 : 40000;
+             const requestTimeout = currentMode === 'Professional' && isDebateOn ? 240000 : 120000;
              const timeoutId = setTimeout(() => controller.abort(), requestTimeout);
             let wakeUpTimer = setTimeout(() => {
                 const loadMsg = document.getElementById('loadingMsg');
