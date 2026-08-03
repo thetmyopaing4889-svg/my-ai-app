@@ -1,17 +1,19 @@
 import os
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from flask import Flask, request, jsonify, render_template
+import uuid
+import json
+from datetime import datetime
+from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 from openai import OpenAI
 import google.genai as genai
 import requests
+import io
 
 app = Flask(__name__)
 CORS(app)
 
 # ============================================
-# 1. Built-in Provider Configuration (Hardcoded Fallback)
+# 1. Configuration & Built-in Providers
 # ============================================
 BUILTIN_PROVIDERS = {
     "deepseek":   {"base_url": "https://api.deepseek.com",           "model": "deepseek-chat"},
@@ -22,7 +24,30 @@ BUILTIN_PROVIDERS = {
 GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
 
 # ============================================
-# 2. Helper Functions
+# 2. File-based Session Storage
+# ============================================
+SESSION_FILE = 'sessions_data.json'
+
+def load_sessions():
+    if os.path.exists(SESSION_FILE):
+        try:
+            with open(SESSION_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_sessions(sessions):
+    try:
+        with open(SESSION_FILE, 'w', encoding='utf-8') as f:
+            json.dump(sessions, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Error saving sessions: {e}")
+
+session_store = load_sessions()
+
+# ============================================
+# 3. Helper Functions
 # ============================================
 def get_openai_client(provider, api_key):
     config = BUILTIN_PROVIDERS.get(provider)
@@ -33,12 +58,8 @@ def get_openai_client(provider, api_key):
 def get_gemini_client(api_key):
     return genai.Client(api_key=api_key)
 
-# ============================================
-# 3. Universal AI Call Functions
-# ============================================
-def call_builtin_ai(prompt, provider, api_key, custom_model=None):
-    if not api_key:
-        return f"Error: No API key provided for {provider}."
+def call_ai(prompt, provider, api_key, custom_model=None):
+    if not api_key: return f"Error: No API key provided for {provider}."
     try:
         if provider == "gemini":
             client = get_gemini_client(api_key)
@@ -48,32 +69,19 @@ def call_builtin_ai(prompt, provider, api_key, custom_model=None):
         else:
             client = get_openai_client(provider, api_key)
             config = BUILTIN_PROVIDERS.get(provider)
-            if not client or not config:
-                return f"Error: {provider} configuration issue."
+            if not client or not config: return f"Error: {provider} configuration issue."
             model_name = custom_model or config["model"]
-            resp = client.chat.completions.create(
-                model=model_name,
-                messages=[{"role": "user", "content": prompt}],
-                timeout=30
-            )
+            resp = client.chat.completions.create(model=model_name, messages=[{"role": "user", "content": prompt}], timeout=30)
             return resp.choices[0].message.content
     except Exception as e:
         return f"Error ({provider}): {str(e)}"
 
-# ✅ NEW: Dynamic Custom Provider Call (Gemini's suggestion)
 def call_custom_ai(base_url, api_key, model_name, prompt):
-    if not base_url or not api_key or not model_name:
-        return "Error: Custom provider configuration incomplete."
+    if not base_url or not api_key or not model_name: return "Error: Custom provider configuration incomplete."
     try:
         url = f"{base_url.rstrip('/')}/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": model_name,
-            "messages": [{"role": "user", "content": prompt}]
-        }
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        payload = {"model": model_name, "messages": [{"role": "user", "content": prompt}]}
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
         return response.json()['choices'][0]['message']['content']
@@ -81,116 +89,47 @@ def call_custom_ai(base_url, api_key, model_name, prompt):
         return f"Custom Provider Error: {str(e)}"
 
 # ============================================
-# 4. Parallel Debate Engine (Supports Built-in + Custom)
+# 4. Multi-Agent Debate Logic (Sequential, Logic Correct)
 # ============================================
-def debate_parallel(prompt, builtin_keys, custom_providers):
-    tasks = []
-    # 1. Add Built-in Agents
-    for provider, keys in builtin_keys.items():
-        if isinstance(keys, list):
-            for idx, key in enumerate(keys):
-                tasks.append({
-                    "type": "builtin",
-                    "provider": provider,
-                    "api_key": key,
-                    "label": f"{provider}-Agent-{idx+1}"
-                })
-    # 2. Add Custom Agents
-    for idx, cp in enumerate(custom_providers):
-        if cp.get('api_key') and cp.get('base_url') and cp.get('model'):
-            tasks.append({
-                "type": "custom",
-                "base_url": cp['base_url'],
-                "api_key": cp['api_key'],
-                "model": cp['model'],
-                "label": cp.get('name', f'Custom-Agent-{idx+1}')
-            })
+def execute_debate(session_id, prompt, api_keys, custom_providers):
+    def get_ai():
+        if api_keys:
+            p = list(api_keys.keys())[0]
+            return p, api_keys[p][0], None
+        elif custom_providers:
+            cp = custom_providers[0]
+            return "custom", cp['api_key'], cp
+        return None, None, None
 
-    if not tasks:
-        return {"System": "Error: No active AI agents found."}
+    provider, key, custom_info = get_ai()
+    if not key:
+        return {"error": "No AI agents available."}
 
-    with ThreadPoolExecutor(max_workers=min(len(tasks), 10)) as executor:
-        future_to_task = {}
-        for task in tasks:
-            if task["type"] == "builtin":
-                future_to_task[executor.submit(call_builtin_ai, prompt, task["provider"], task["api_key"])] = task["label"]
-            else:
-                future_to_task[executor.submit(call_custom_ai, task["base_url"], task["api_key"], task["model"], prompt)] = task["label"]
-        
-        results = {}
-        for future in as_completed(future_to_task):
-            label = future_to_task[future]
-            try:
-                results[label] = future.result()
-            except Exception as e:
-                results[label] = f"Error: {str(e)}"
-        return results
-
-# ============================================
-# 5. Justice AI (Recommendation Mode - Debate OFF)
-# ============================================
-def justice_ai_recommendation(debate_results, original_prompt, api_keys, custom_providers, justice_provider, justice_key):
-    # Helper to get a valid key for Justice
-    if not justice_key:
-        # Try built-in first
-        for p in ["gemini", "deepseek", "groq", "github", "openrouter"]:
-            if p in api_keys and isinstance(api_keys[p], list) and len(api_keys[p]) > 0:
-                justice_provider = p
-                justice_key = api_keys[p][0]
-                break
-        # If no built-in, try custom providers
-        if not justice_key and custom_providers:
-            justice_provider = "custom"
-            justice_key = custom_providers[0].get('api_key')
-            justice_model = custom_providers[0].get('model')
-            justice_url = custom_providers[0].get('base_url')
-
-    formatted_responses = "\n\n".join([f"--- [{agent}] ---\n{resp[:1000]}" for agent, resp in debate_results.items()])
-    
-    recommendation_prompt = f"""You are Justice AI, an impartial and expert AI evaluator.
-Below are multiple answers generated by different AI models for the same prompt.
-
-User Original Prompt:
-{original_prompt}
-
-AI Model Responses:
-{formatted_responses}
-
-Task:
-1. Compare and evaluate all responses for technical accuracy, clarity, and completeness.
-2. Clearly state which AI Agent provided the BEST response and why.
-3. Present the winning response or a refined synthesis as your final recommendation."""
-
-    if justice_provider == "custom":
-        return call_custom_ai(justice_url, justice_key, justice_model, recommendation_prompt)
+    # 1. Lead Architect generates solution
+    lead_prompt = f"You are a Senior Software Architect. Provide a comprehensive solution, code, and architecture plan for the following request.\n\nRequest: {prompt}"
+    if provider == "custom":
+        architect_solution = call_custom_ai(custom_info['base_url'], key, custom_info['model'], lead_prompt)
     else:
-        return call_builtin_ai(recommendation_prompt, justice_provider, justice_key)
+        architect_solution = call_ai(lead_prompt, provider, key)
+
+    # 2. Skeptic Agent critiques the generated solution (Corrected Logic)
+    skeptic_prompt = f"You are a Skeptic Agent. Your job is to critically review the solution provided by the Senior Software Architect. Identify edge cases, security flaws, potential bugs, and suggest improvements.\n\nSolution to review:\n{architect_solution}"
+    if provider == "custom":
+        critique = call_custom_ai(custom_info['base_url'], key, custom_info['model'], skeptic_prompt)
+    else:
+        critique = call_ai(skeptic_prompt, provider, key)
+
+    # 3. Lead Architect refines based on Critique
+    refine_prompt = f"You are a Senior Software Architect. You received the following critique on your solution. Refine your solution to address the critiques and provide the final optimal answer.\n\nYour Original Solution:\n{architect_solution}\n\nCritique:\n{critique}"
+    if provider == "custom":
+        final_answer = call_custom_ai(custom_info['base_url'], key, custom_info['model'], refine_prompt)
+    else:
+        final_answer = call_ai(refine_prompt, provider, key)
+
+    return {"architect": architect_solution, "skeptic": critique, "final": final_answer}
 
 # ============================================
-# 6. Consensus Debate Engine (Debate ON)
-# ============================================
-def consensus_debate(prompt, api_keys, custom_providers):
-    # Round 1: Initial Answers
-    round1_results = debate_parallel(prompt, api_keys, custom_providers)
-    formatted_r1 = "\n\n".join([f"[{agent}]: {resp}" for agent, resp in round1_results.items()])
-    
-    # Round 2: Cross-Critique
-    critique_prompt = f"User Prompt: {prompt}\n\nReview these initial answers from other agents and provide constructive critique:\n\n{formatted_r1}"
-    critique_results = debate_parallel(critique_prompt, api_keys, custom_providers)
-    formatted_critiques = "\n\n".join([f"[{agent} Critique]: {resp}" for agent, resp in critique_results.items()])
-    
-    # Round 3: Refinement & Final Consensus
-    consensus_prompt = f"User Prompt: {prompt}\n\nCritiques received:\n{formatted_critiques}\n\nPlease synthesize the absolute best, error-free consensus answer that incorporates all valid corrections."
-    consensus_results = debate_parallel(consensus_prompt, api_keys, custom_providers)
-    
-    for agent, text in consensus_results.items():
-        if not text.startswith("Error:"):
-            return f"🤝 **Debate Consensus Answer (Validated by Multi-Agent Pool):**\n\n{text}"
-            
-    return list(consensus_results.values())[0] if consensus_results else "No consensus reached."
-
-# ============================================
-# 7. Main Chat Routes
+# 5. Routes
 # ============================================
 @app.route('/')
 def index():
@@ -199,54 +138,68 @@ def index():
 @app.route('/api/chat', methods=['POST'])
 def chat():
     data = request.get_json(silent=True) or {}
+    session_id = data.get('sessionId')
     mode = data.get('mode', 'General')
     user_message = data.get('message', '')
     debate_on = data.get('debateOn', False)
-    
-    # New Dynamic Data Structure
-    api_keys = data.get('apiKeys', {})          # Built-in providers: {"gemini": ["key1"], ...}
-    custom_providers = data.get('customProviders', []) # Custom providers: [{"name": "Kimi", "base_url": "...", "api_key": "...", "model": "..."}]
-    
+    api_keys = data.get('apiKeys', {})
+    custom_providers = data.get('customProviders', [])
     pg_state = data.get('pgState', {})
-    pg_selector = data.get('pgSelector', {})
-    justice_selector = data.get('justiceSelector', {})
 
     if not user_message.strip():
         return jsonify({"error": "Empty message"}), 400
 
+    # Session ID Logic
+    if not session_id or session_id not in session_store:
+        session_id = str(uuid.uuid4())
+    
+    if session_id not in session_store:
+        session_store[session_id] = {"history": [], "mode": mode, "pg_state": pg_state, "created_at": datetime.now().isoformat()}
+        save_sessions(session_store)
+
+    session_store[session_id]["history"].append({"role": "user", "content": user_message})
+    save_sessions(session_store)
+
     if mode == "General":
         base_prompt = "You are a helpful, friendly, and concise AI assistant. Answer clearly and directly."
-    else:
-        base_prompt = "You are a Senior Software Architect and Lead Developer. Output step-by-step production-grade code, security edge-case analyses, and clear system architecture guidelines."
-
-    anchor_context = ""
-    if pg_state.get('locked'):
-        core_spec = pg_state.get('coreSpec', 'Defined in prior planning')
-        progress = ", ".join(pg_state.get('progress', [])) or "None yet"
-        active_focus = pg_state.get('activeFocus', 'Phase 1')
-        anchor_context = f"\n[PROJECT GUARDIAN MASTER SPEC]\n- Core Goal: {core_spec}\n- Completed Phases: {progress}\n- Active Focus: {active_focus}\n"
-
-    full_prompt = f"{base_prompt}\n{anchor_context}\nUser Request: {user_message}"
-
-    try:
-        if not debate_on:
-            # OFF: Multi-Agent + Justice AI Recommendation
-            debate_results = debate_parallel(full_prompt, api_keys, custom_providers)
-            j_provider = justice_selector.get('provider', 'gemini')
-            j_key = justice_selector.get('key', '')
-            ai_reply = justice_ai_recommendation(debate_results, full_prompt, api_keys, custom_providers, j_provider, j_key)
+        if api_keys:
+            p = list(api_keys.keys())[0]
+            ai_reply = call_ai(user_message, p, api_keys[p][0])
+        elif custom_providers:
+            cp = custom_providers[0]
+            ai_reply = call_custom_ai(cp['base_url'], cp['api_key'], cp['model'], user_message)
         else:
-            # ON: Multi-Agent Consensus Debate (No Justice AI)
-            ai_reply = consensus_debate(full_prompt, api_keys, custom_providers)
-            
-    except Exception as e:
-        ai_reply = f"Error processing request: {str(e)}"
+            ai_reply = "Error: No API keys or Custom Providers found."
+    else:
+        prompt_with_context = f"User Goal: {user_message}\n\nContext: {pg_state.get('coreSpec', 'None defined yet')}"
+        if not debate_on:
+            result = execute_debate(session_id, prompt_with_context, api_keys, custom_providers)
+            ai_reply = f"**Lead Architect's Solution:**\n{result['architect']}\n\n---\n**Skeptic's Critique:**\n{result['skeptic']}\n\n---\n**Final Refined Solution:**\n{result['final']}"
+        else:
+            result = execute_debate(session_id, prompt_with_context, api_keys, custom_providers)
+            ai_reply = result['final']
 
-    return jsonify({
-        "response": ai_reply,
-        "mode": mode,
-        "debateOn": debate_on
-    })
+    session_store[session_id]["history"].append({"role": "assistant", "content": ai_reply})
+    save_sessions(session_store)
+
+    return jsonify({"response": ai_reply, "mode": mode, "debateOn": debate_on, "sessionId": session_id})
+
+@app.route('/api/export/<session_id>', methods=['GET'])
+def export_chat(session_id):
+    if session_id not in session_store:
+        return jsonify({"error": "Session not found"}), 404
+    
+    session = session_store[session_id]
+    history = session['history']
+    markdown = f"# AI Architect Session Report\n\n**Session ID:** {session_id}\n**Created At:** {session['created_at']}\n**Mode:** {session['mode']}\n\n"
+    markdown += "## Conversation History\n\n"
+    for msg in history:
+        role = "🤖 **Assistant**" if msg['role'] == 'assistant' else "👤 **User**"
+        markdown += f"### {role}\n{msg['content']}\n\n---\n\n"
+    memory_file = io.BytesIO()
+    memory_file.write(markdown.encode('utf-8'))
+    memory_file.seek(0)
+    return send_file(memory_file, as_attachment=True, download_name=f"ai_architect_session_{session_id}.md", mimetype='text/markdown')
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
