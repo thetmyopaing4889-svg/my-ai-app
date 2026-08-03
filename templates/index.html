@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AI Architect</title>
-    <!-- Dexie.js for IndexedDB -->
     <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.11/dist/dexie.min.js"></script>
     <style>
-        /* Base Styles */
+        /* Same as before */
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, sans-serif; }
         html, body { background-color: #0f0f0f; color: #ffffff; height: 100vh; height: -webkit-fill-available; width: 100vw; overflow: hidden; position: relative; }
         
@@ -240,11 +239,11 @@
 
     <script>
         // =============================================
-        // 1. IndexedDB Setup (Dexie.js)
+        // 1. IndexedDB Setup (Dexie.js) - Fixed Schema
         // =============================================
         const db = new Dexie('AIChatDB');
         db.version(1).stores({
-            sessions: '++id, title, mode, createdAt' // Schema: id, title, messages(array), mode, pgState(object), createdAt
+            sessions: 'id, title, mode, createdAt' // ✅ id (String) as primary key
         });
 
         // =============================================
@@ -254,7 +253,7 @@
         let currentMode = 'General';
         let currentSessionId = null;
         let currentSessionTitle = '';
-        let currentMessages = []; // Array for current chat history to render
+        let currentMessages = [];
         let pgState = { locked: false, coreSpec: '', progress: [], activeFocus: '' };
         const PROVIDERS = ['deepseek', 'gemini', 'github', 'groq', 'openrouter'];
 
@@ -316,7 +315,7 @@
         }
 
         // =============================================
-        // 4. Session CRUD Operations
+        // 4. Session CRUD Operations (using String ID)
         // =============================================
         async function loadSessions() {
             const list = document.getElementById('sessionList');
@@ -325,12 +324,11 @@
                 list.innerHTML = `<div style="padding:20px; color:#888; font-size:14px; text-align:center;">No sessions yet.</div>`;
                 return;
             }
-            // Sort by newest first
-            sessions.sort((a, b) => b.id - a.id);
+            sessions.sort((a, b) => a.id.localeCompare(b.id) * -1); // newer first (timestamps sort)
             list.innerHTML = sessions.map(s => `
-                <div class="session-item" onclick="loadSession(${s.id})">
+                <div class="session-item" onclick="loadSession('${s.id}')">
                     <span class="title">${s.title || 'Untitled'}</span>
-                    <span class="delete-btn" onclick="event.stopPropagation(); deleteSession(${s.id})">🗑️</span>
+                    <span class="delete-btn" onclick="event.stopPropagation(); deleteSession('${s.id}')">🗑️</span>
                 </div>
             `).join('');
         }
@@ -341,19 +339,15 @@
                 showToast('Session not found.', 'error');
                 return;
             }
-            // Restore State
             currentSessionId = session.id;
             currentSessionTitle = session.title;
             currentMode = session.mode || 'General';
             currentMessages = session.messages || [];
             pgState = session.pgState || { locked: false, coreSpec: '', progress: [], activeFocus: '' };
 
-            // Restore UI
-            setMode(currentMode); // Also calls updatePGUI()
+            setMode(currentMode);
             updatePGUI();
             renderChatHistory();
-            
-            // Close sidebar after load
             if (document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
             showToast(`📂 Loaded: ${currentSessionTitle}`, 'success');
             localStorage.setItem('current_session_id', currentSessionId);
@@ -370,7 +364,7 @@
                 createdAt: new Date().toISOString()
             };
             await db.sessions.put(sessionData);
-            await loadSessions(); // Refresh sidebar list
+            await loadSessions();
         }
 
         async function deleteSession(id) {
@@ -396,7 +390,6 @@
             }
             document.getElementById('emptyState').style.display = 'none';
             document.getElementById('activeChat').style.display = 'flex';
-            
             currentMessages.forEach(msg => {
                 const row = document.createElement('div');
                 row.className = `message-row ${msg.role}`;
@@ -438,7 +431,6 @@
             document.getElementById('pillProfessional').classList.remove('active');
             document.getElementById(mode === 'General' ? 'pillGeneral' : 'pillProfessional').classList.add('active');
             updatePGUI();
-            // Save state change to DB
             if (currentSessionId) saveCurrentSession();
         }
 
@@ -509,27 +501,37 @@
             showToast('✨ New chat started.', 'success');
         }
 
+        // ✅ NEW: Export Chat directly from IndexedDB (Frontend-only)
         async function exportChat() {
             if(!currentSessionId) {
                 showToast('⚠️ No active session to export.', 'error');
                 return;
             }
-            try {
-                const response = await fetch(`/api/export/${currentSessionId}`);
-                if(!response.ok) throw new Error('Export failed');
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `ai_architect_session_${currentSessionId}.md`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-                showToast('📄 Report downloaded successfully!', 'success');
-            } catch (err) {
-                showToast('❌ Export failed: ' + err.message, 'error');
+            const session = await db.sessions.get(currentSessionId);
+            if (!session) {
+                showToast('Session not found.', 'error');
+                return;
             }
+            const history = session.messages || [];
+            let markdown = `# AI Architect Session Report\n\n`;
+            markdown += `**Session ID:** ${session.id}\n`;
+            markdown += `**Created At:** ${session.createdAt}\n`;
+            markdown += `**Mode:** ${session.mode}\n\n`;
+            markdown += `## Conversation History\n\n`;
+            history.forEach(msg => {
+                const role = msg.role === 'assistant' ? '🤖 **Assistant**' : '👤 **User**';
+                markdown += `### ${role}\n${msg.content}\n\n---\n\n`;
+            });
+            const blob = new Blob([markdown], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ai_architect_session_${session.id}.md`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('📄 Report downloaded successfully!', 'success');
         }
 
         // =============================================
@@ -545,7 +547,7 @@
         }
 
         // =============================================
-        // 7. Settings Modal & API Key Management
+        // 7. Settings Modal & API Key Management (unchanged)
         // =============================================
         function loadSettingsUI() {
             const container = document.getElementById('settingsContainer');
@@ -571,7 +573,6 @@
             });
             updateSelectorOptions();
             loadCustomProvidersUI();
-            // Load saved passcode into UI
             const savedHash = localStorage.getItem('passcode_hash');
             if (savedHash) {
                 document.getElementById('newPasscode').value = '****';
@@ -706,17 +707,14 @@
 
             // Initiate Session if new
             if (!currentSessionId) {
-                currentSessionId = 'session_' + Date.now();
-                // Auto Titling: Use the first 15-20 characters of the message
+                currentSessionId = 'session_' + Date.now(); // String ID
                 currentSessionTitle = input.substring(0, 20) + (input.length > 20 ? '...' : '');
                 localStorage.setItem('current_session_id', currentSessionId);
                 pgState = { locked: false, coreSpec: '', progress: [], activeFocus: '' };
-                // Reset UI for new session
                 document.getElementById('emptyState').style.display = 'none';
                 document.getElementById('activeChat').style.display = 'flex';
             }
 
-            // Render User Message locally
             const chatContainer = document.getElementById('activeChat');
             const userMsgDiv = document.createElement('div');
             userMsgDiv.className = 'message-row user';
@@ -727,11 +725,9 @@
             chatContainer.appendChild(userMsgDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
             
-            // Save User Message to Memory & DB
             currentMessages.push({ role: 'user', content: input });
             await saveCurrentSession();
 
-            // Loading Indicator
             const loadingDiv = document.createElement('div');
             loadingDiv.className = 'message-row ai';
             loadingDiv.id = 'loadingMsg';
@@ -787,7 +783,6 @@
                     localStorage.setItem('current_session_id', currentSessionId);
                 }
                 
-                // Display AI Response
                 const aiMsgDiv = document.createElement('div');
                 aiMsgDiv.className = 'message-row ai';
                 const aiBubble = document.createElement('div');
@@ -815,14 +810,8 @@
                 chatContainer.appendChild(aiMsgDiv);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
 
-                // Save AI Response to Memory & DB
                 currentMessages.push({ role: 'assistant', content: data.response });
                 await saveCurrentSession();
-
-                // Update sidebar title if it's the first message and title was auto-generated
-                if (currentSessionTitle && currentMessages.length === 2) {
-                    // Title is already set on first user message
-                }
                 await loadSessions();
 
             } catch (error) {
@@ -838,24 +827,18 @@
         // 9. Initialization
         // =============================================
         document.addEventListener('DOMContentLoaded', async function() {
-            // Check Passcode first
             checkPasscodeSetup();
-            
-            // Load UI components
             loadSettingsUI();
             await loadSessions();
             
-            // Restore last session if exists
             const savedId = localStorage.getItem('current_session_id');
             if (savedId) {
-                // ✅ FIX: Check if ID is numeric, if not, search by string directly
-                const session = await db.sessions.get(isNaN(savedId) ? savedId : parseInt(savedId));
+                const session = await db.sessions.get(savedId); // directly use string ID
                 if (session) {
                     await loadSession(session.id);
                     return;
                 }
             }
-            // If no session, start new chat
             newChat();
             updatePGUI();
         });
