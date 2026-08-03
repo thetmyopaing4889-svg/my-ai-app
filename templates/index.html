@@ -4,11 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AI Architect</title>
+    <!-- Dexie.js for IndexedDB -->
+    <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.11/dist/dexie.min.js"></script>
     <style>
         /* Base Styles */
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, sans-serif; }
         html, body { background-color: #0f0f0f; color: #ffffff; height: 100vh; height: -webkit-fill-available; width: 100vw; overflow: hidden; position: relative; }
         
+        /* Lock Screen Overlay */
+        #lockScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f0f0f; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #lockScreen.hidden { display: none !important; }
+        #lockScreen h2 { font-size: 24px; margin-bottom: 20px; color: #4a90e2; }
+        #lockScreen input { width: 200px; padding: 15px; font-size: 24px; text-align: center; border: 1px solid #333; border-radius: 12px; background: #1e1e1e; color: #fff; outline: none; }
+        #lockScreen input:focus { border-color: #4a90e2; }
+        #lockScreen .error { color: #ff4444; margin-top: 15px; font-size: 14px; }
+
         .sidebar { position: fixed; top: 0; left: 0; width: 80%; max-width: 320px; height: 100%; background: #171717; z-index: 20; transform: translateX(-100%); transition: transform 0.3s ease; display: flex; flex-direction: column; padding: 20px; border-right: 1px solid #222; }
         .sidebar.open { transform: translateX(0); }
         .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 15; display: none; }
@@ -16,7 +26,9 @@
         .search-bar { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #333; background: #222; color: #fff; margin-bottom: 20px; }
         .session-list { flex-grow: 1; overflow-y: auto; }
         .session-item { padding: 12px; border-bottom: 1px solid #222; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .delete-btn { color: #ff4444; cursor: pointer; font-size: 14px; }
+        .session-item:hover { background: #222; }
+        .session-item .title { flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+        .delete-btn { color: #ff4444; cursor: pointer; font-size: 14px; padding: 0 5px; }
         .sidebar-footer { border-top: 1px solid #222; padding-top: 15px; display: flex; justify-content: space-between; align-items: center; }
         .username { font-size: 14px; font-weight: 500; }
         .settings-btn { font-size: 20px; cursor: pointer; color: #888; }
@@ -49,7 +61,6 @@
         .ai-actions { margin-top: 5px; display: flex; gap: 10px; font-size: 12px; color: #888; }
         .ai-actions span { cursor: pointer; user-select: none; }
 
-        /* Toast & Input */
         .toast-container { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 200; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
         .toast-item { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: slideIn 0.3s ease; pointer-events: auto; display: flex; justify-content: space-between; align-items: center; }
         .toast-item.error { border-color: #ff4444; background: #2a1a1a; }
@@ -68,7 +79,6 @@
         .plus-btn { width: 32px; height: 32px; border-radius: 50%; background: #27272a; border: 1px solid #3f3f46; color: #a1a1aa; font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         .send-btn { width: 36px; height: 36px; border-radius: 50%; background: #3b82f6; border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 
-        /* Settings Modal */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; display: none; justify-content: center; align-items: center; }
         .modal-overlay.open { display: flex; }
         .modal-content { background: #1e1e1e; width: 90%; max-width: 400px; border-radius: 16px; padding: 20px; border: 1px solid #333; max-height: 80vh; overflow-y: auto; }
@@ -95,6 +105,14 @@
     </style>
 </head>
 <body>
+
+    <!-- Lock Screen -->
+    <div id="lockScreen">
+        <h2>🔒 AI Architect</h2>
+        <input type="password" id="passcodeInput" maxlength="4" placeholder="Enter 4-digit code" onkeydown="if(event.key==='Enter') verifyLockScreen()">
+        <div class="error" id="lockError"></div>
+    </div>
+
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
@@ -105,6 +123,17 @@
             <div class="modal-title">🔑 API Keys & Configuration</div>
             <p style="font-size: 12px; color: #888; margin-bottom: 15px;">Keys stored in browser localStorage.</p>
             <div id="settingsContainer"></div>
+
+            <!-- Passcode Section -->
+            <div class="settings-group" style="border-bottom: none;">
+                <label style="font-weight: bold;">🔐 Passcode Lock</label>
+                <div class="key-input-wrap">
+                    <input type="password" id="newPasscode" placeholder="Set 4-digit Passcode" maxlength="4">
+                    <button class="btn-add-key" onclick="updatePasscode()">Set Passcode</button>
+                </div>
+                <div style="font-size: 12px; color: #888; margin-top: 4px;">Leave empty and click Set to remove passcode.</div>
+            </div>
+
             <div class="settings-group" style="border-bottom: none;">
                 <label style="font-weight: bold;">🧩 Custom OpenAI-Compatible Providers</label>
                 <div class="custom-provider-group">
@@ -210,19 +239,186 @@
     </div>
 
     <script>
-        // State
+        // =============================================
+        // 1. IndexedDB Setup (Dexie.js)
+        // =============================================
+        const db = new Dexie('AIChatDB');
+        db.version(1).stores({
+            sessions: '++id, title, mode, createdAt' // Schema: id, title, messages(array), mode, pgState(object), createdAt
+        });
+
+        // =============================================
+        // 2. State Management
+        // =============================================
         let isDebateOn = false;
         let currentMode = 'General';
-        let currentSessionId = localStorage.getItem('current_session_id') || null;
+        let currentSessionId = null;
+        let currentSessionTitle = '';
+        let currentMessages = []; // Array for current chat history to render
+        let pgState = { locked: false, coreSpec: '', progress: [], activeFocus: '' };
         const PROVIDERS = ['deepseek', 'gemini', 'github', 'groq', 'openrouter'];
-        let pgState = JSON.parse(localStorage.getItem('pg_state')) || { locked: false, coreSpec: '', progress: [], activeFocus: '' };
 
-        // ------------- Settings Modal -------------
+        // =============================================
+        // 3. Passcode Logic (Native SHA-256)
+        // =============================================
+        async function sha256(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function checkPasscodeSetup() {
+            const hash = localStorage.getItem('passcode_hash');
+            if (hash) {
+                document.getElementById('lockScreen').classList.remove('hidden');
+            } else {
+                document.getElementById('lockScreen').classList.add('hidden');
+            }
+        }
+
+        async function verifyLockScreen() {
+            const input = document.getElementById('passcodeInput');
+            const entered = input.value;
+            const storedHash = localStorage.getItem('passcode_hash');
+            if (!storedHash) {
+                document.getElementById('lockScreen').classList.add('hidden');
+                return;
+            }
+            const enteredHash = await sha256(entered);
+            if (enteredHash === storedHash) {
+                document.getElementById('lockScreen').classList.add('hidden');
+                document.getElementById('lockError').textContent = '';
+                input.value = '';
+            } else {
+                document.getElementById('lockError').textContent = '❌ Incorrect passcode!';
+                input.value = '';
+            }
+        }
+
+        async function updatePasscode() {
+            const input = document.getElementById('newPasscode');
+            const val = input.value.trim();
+            if (!val) {
+                localStorage.removeItem('passcode_hash');
+                showToast('🔓 Passcode removed.', 'success');
+                input.value = '';
+                return;
+            }
+            if (val.length !== 4 || isNaN(val)) {
+                showToast('⚠️ Please enter a 4-digit number.', 'error');
+                return;
+            }
+            const hash = await sha256(val);
+            localStorage.setItem('passcode_hash', hash);
+            showToast('🔒 Passcode updated!', 'success');
+            input.value = '';
+        }
+
+        // =============================================
+        // 4. Session CRUD Operations
+        // =============================================
+        async function loadSessions() {
+            const list = document.getElementById('sessionList');
+            const sessions = await db.sessions.toArray();
+            if (sessions.length === 0) {
+                list.innerHTML = `<div style="padding:20px; color:#888; font-size:14px; text-align:center;">No sessions yet.</div>`;
+                return;
+            }
+            // Sort by newest first
+            sessions.sort((a, b) => b.id - a.id);
+            list.innerHTML = sessions.map(s => `
+                <div class="session-item" onclick="loadSession(${s.id})">
+                    <span class="title">${s.title || 'Untitled'}</span>
+                    <span class="delete-btn" onclick="event.stopPropagation(); deleteSession(${s.id})">🗑️</span>
+                </div>
+            `).join('');
+        }
+
+        async function loadSession(id) {
+            const session = await db.sessions.get(id);
+            if (!session) {
+                showToast('Session not found.', 'error');
+                return;
+            }
+            // Restore State
+            currentSessionId = session.id;
+            currentSessionTitle = session.title;
+            currentMode = session.mode || 'General';
+            currentMessages = session.messages || [];
+            pgState = session.pgState || { locked: false, coreSpec: '', progress: [], activeFocus: '' };
+
+            // Restore UI
+            setMode(currentMode); // Also calls updatePGUI()
+            updatePGUI();
+            renderChatHistory();
+            
+            // Close sidebar after load
+            if (document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
+            showToast(`📂 Loaded: ${currentSessionTitle}`, 'success');
+            localStorage.setItem('current_session_id', currentSessionId);
+        }
+
+        async function saveCurrentSession() {
+            if (!currentSessionId) return;
+            const sessionData = {
+                id: currentSessionId,
+                title: currentSessionTitle || 'New Chat',
+                messages: currentMessages,
+                mode: currentMode,
+                pgState: pgState,
+                createdAt: new Date().toISOString()
+            };
+            await db.sessions.put(sessionData);
+            await loadSessions(); // Refresh sidebar list
+        }
+
+        async function deleteSession(id) {
+            if (!confirm('Delete this session permanently?')) return;
+            await db.sessions.delete(id);
+            if (currentSessionId === id) {
+                newChat();
+            }
+            await loadSessions();
+            showToast('🗑️ Session deleted.', 'warning');
+        }
+
+        // =============================================
+        // 5. Core UI Functions
+        // =============================================
+        function renderChatHistory() {
+            const chatContainer = document.getElementById('activeChat');
+            chatContainer.innerHTML = '';
+            if (currentMessages.length === 0) {
+                document.getElementById('emptyState').style.display = 'flex';
+                document.getElementById('activeChat').style.display = 'none';
+                return;
+            }
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('activeChat').style.display = 'flex';
+            
+            currentMessages.forEach(msg => {
+                const row = document.createElement('div');
+                row.className = `message-row ${msg.role}`;
+                const bubble = document.createElement('div');
+                bubble.className = `message-bubble ${msg.role}`;
+                bubble.textContent = msg.content;
+                row.appendChild(bubble);
+                chatContainer.appendChild(row);
+            });
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('overlay').classList.toggle('open');
+            document.getElementById('appContainer').classList.toggle('sidebar-open');
+        }
+
         function toggleSettings() {
             const modal = document.getElementById('settingsModal');
-            if(!modal) return;
             modal.classList.toggle('open');
-            if(modal.classList.contains('open')) {
+            if (modal.classList.contains('open')) {
                 try { loadSettingsUI(); } catch(e) { console.error(e); }
             }
         }
@@ -234,6 +430,123 @@
             setTimeout(() => { toggleSettings(); }, 150);
         }
 
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById('headerMode').innerText = mode;
+            document.getElementById('emptyText').innerText = `Start chatting with ${mode}`;
+            document.getElementById('pillGeneral').classList.remove('active');
+            document.getElementById('pillProfessional').classList.remove('active');
+            document.getElementById(mode === 'General' ? 'pillGeneral' : 'pillProfessional').classList.add('active');
+            updatePGUI();
+            // Save state change to DB
+            if (currentSessionId) saveCurrentSession();
+        }
+
+        function toggleDebate() {
+            isDebateOn = !isDebateOn;
+            document.getElementById('debateToggle').checked = isDebateOn;
+        }
+
+        function lockPlan() {
+            if(pgState.locked) return;
+            pgState.locked = true; 
+            pgState.activeFocus = 'Phase 1: Initial Setup';
+            updatePGUI();
+            showToast('🔒 Plan Locked!', 'success');
+            if (currentSessionId) saveCurrentSession();
+        }
+
+        function syncPhase() {
+            if(!pgState.locked) return;
+            const newPhase = prompt("Enter the next phase name:");
+            if(!newPhase) return;
+            if(pgState.activeFocus) pgState.progress.push(pgState.activeFocus);
+            pgState.activeFocus = newPhase;
+            updatePGUI();
+            showToast(`🔄 Synced! Moved to: ${newPhase}`, 'success');
+            if (currentSessionId) saveCurrentSession();
+        }
+
+        function editPlan() {
+            if(!pgState.locked) return;
+            if(confirm("Unlock plan and reset progress?")) {
+                pgState.locked = false; pgState.coreSpec = ''; pgState.progress = []; pgState.activeFocus = '';
+                updatePGUI();
+                showToast('🔓 Plan unlocked.', 'warning');
+                if (currentSessionId) saveCurrentSession();
+            }
+        }
+
+        function updatePGUI() {
+            const pgControls = document.getElementById('pgControls');
+            if(currentMode === 'Professional') { pgControls.style.display = 'flex'; } else { pgControls.style.display = 'none'; }
+            const btnLock = document.getElementById('btnLock');
+            const btnSync = document.getElementById('btnSync');
+            const btnEdit = document.getElementById('btnEdit');
+            if(pgState.locked) {
+                btnLock.className = 'pg-btn locked'; btnLock.textContent = '🔒 Plan Locked';
+                btnSync.disabled = false; btnEdit.disabled = false;
+            } else {
+                btnLock.className = 'pg-btn'; btnLock.textContent = '🔒 Lock Plan';
+                btnSync.disabled = true; btnEdit.disabled = true;
+            }
+        }
+
+        function newChat() {
+            currentSessionId = null;
+            currentSessionTitle = '';
+            currentMessages = [];
+            pgState = { locked: false, coreSpec: '', progress: [], activeFocus: '' };
+            localStorage.removeItem('current_session_id');
+            document.getElementById('activeChat').innerHTML = '';
+            document.getElementById('emptyState').style.display = 'flex';
+            document.getElementById('activeChat').style.display = 'none';
+            document.getElementById('chatInput').value = ''; 
+            document.getElementById('chatInput').style.height = 'auto'; 
+            if(document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
+            updatePGUI();
+            loadSessions();
+            showToast('✨ New chat started.', 'success');
+        }
+
+        async function exportChat() {
+            if(!currentSessionId) {
+                showToast('⚠️ No active session to export.', 'error');
+                return;
+            }
+            try {
+                const response = await fetch(`/api/export/${currentSessionId}`);
+                if(!response.ok) throw new Error('Export failed');
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ai_architect_session_${currentSessionId}.md`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                showToast('📄 Report downloaded successfully!', 'success');
+            } catch (err) {
+                showToast('❌ Export failed: ' + err.message, 'error');
+            }
+        }
+
+        // =============================================
+        // 6. Toast Notifications
+        // =============================================
+        function showToast(message, type = 'warning') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast-item ${type}`;
+            toast.innerHTML = `<span>${message}</span><span class="toast-close" onclick="this.parentElement.remove()">✕</span>`;
+            container.appendChild(toast);
+            setTimeout(() => { if(toast.parentElement) toast.remove(); }, 8000);
+        }
+
+        // =============================================
+        // 7. Settings Modal & API Key Management
+        // =============================================
         function loadSettingsUI() {
             const container = document.getElementById('settingsContainer');
             container.innerHTML = '';
@@ -258,6 +571,11 @@
             });
             updateSelectorOptions();
             loadCustomProvidersUI();
+            // Load saved passcode into UI
+            const savedHash = localStorage.getItem('passcode_hash');
+            if (savedHash) {
+                document.getElementById('newPasscode').value = '****';
+            }
         }
 
         function addKey(provider) {
@@ -320,6 +638,15 @@
             return JSON.parse(localStorage.getItem('custom_providers')) || [];
         }
 
+        function getApiKeysPayload() {
+            const payload = {};
+            PROVIDERS.forEach(provider => {
+                const keys = JSON.parse(localStorage.getItem(`keys_${provider}`)) || [];
+                if(keys.length > 0) payload[provider] = keys;
+            });
+            return payload;
+        }
+
         function updateSelectorOptions() {
             const pgProvider = document.getElementById('pgProvider');
             const pgKey = document.getElementById('pgKey');
@@ -337,15 +664,6 @@
             updateKeyDropdown(justiceProvider, justiceKey);
         }
 
-        function getApiKeysPayload() {
-            const payload = {};
-            PROVIDERS.forEach(provider => {
-                const keys = JSON.parse(localStorage.getItem(`keys_${provider}`)) || [];
-                if(keys.length > 0) payload[provider] = keys;
-            });
-            return payload;
-        }
-
         function getPGSelector() {
             return { provider: document.getElementById('pgProvider').value, key: document.getElementById('pgKey').value };
         }
@@ -353,114 +671,9 @@
             return { provider: document.getElementById('justiceProvider').value, key: document.getElementById('justiceKey').value };
         }
 
-        // Toast
-        function showToast(message, type = 'warning') {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            toast.className = `toast-item ${type}`;
-            toast.innerHTML = `<span>${message}</span><span class="toast-close" onclick="this.parentElement.remove()">✕</span>`;
-            container.appendChild(toast);
-            setTimeout(() => { if(toast.parentElement) toast.remove(); }, 8000);
-        }
-
-        // PG Logic
-        function updatePGUI() {
-            const pgControls = document.getElementById('pgControls');
-            if(currentMode === 'Professional') { pgControls.style.display = 'flex'; } else { pgControls.style.display = 'none'; }
-            const btnLock = document.getElementById('btnLock');
-            const btnSync = document.getElementById('btnSync');
-            const btnEdit = document.getElementById('btnEdit');
-            if(pgState.locked) {
-                btnLock.className = 'pg-btn locked'; btnLock.textContent = '🔒 Plan Locked';
-                btnSync.disabled = false; btnEdit.disabled = false;
-            } else {
-                btnLock.className = 'pg-btn'; btnLock.textContent = '🔒 Lock Plan';
-                btnSync.disabled = true; btnEdit.disabled = true;
-            }
-        }
-
-        function lockPlan() {
-            if(pgState.locked) return;
-            pgState.locked = true; pgState.activeFocus = 'Phase 1: Initial Setup';
-            localStorage.setItem('pg_state', JSON.stringify(pgState)); updatePGUI();
-            showToast('🔒 Plan Locked!', 'success');
-        }
-
-        function syncPhase() {
-            if(!pgState.locked) return;
-            const newPhase = prompt("Enter the next phase name:");
-            if(!newPhase) return;
-            if(pgState.activeFocus) pgState.progress.push(pgState.activeFocus);
-            pgState.activeFocus = newPhase;
-            localStorage.setItem('pg_state', JSON.stringify(pgState)); updatePGUI();
-            showToast(`🔄 Synced! Moved to: ${newPhase}`, 'success');
-        }
-
-        function editPlan() {
-            if(!pgState.locked) return;
-            if(confirm("Unlock plan and reset progress?")) {
-                pgState.locked = false; pgState.coreSpec = ''; pgState.progress = []; pgState.activeFocus = '';
-                localStorage.setItem('pg_state', JSON.stringify(pgState)); updatePGUI();
-                showToast('🔓 Plan unlocked.', 'warning');
-            }
-        }
-
-        async function exportChat() {
-            if(!currentSessionId) {
-                showToast('⚠️ No active session to export.', 'error');
-                return;
-            }
-            try {
-                const response = await fetch(`/api/export/${currentSessionId}`);
-                if(!response.ok) throw new Error('Export failed');
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `ai_architect_session_${currentSessionId}.md`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-                showToast('📄 Report downloaded successfully!', 'success');
-            } catch (err) {
-                showToast('❌ Export failed: ' + err.message, 'error');
-            }
-        }
-
-        // Core UI
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('open');
-            document.getElementById('overlay').classList.toggle('open');
-            document.getElementById('appContainer').classList.toggle('sidebar-open');
-        }
-
-        function setMode(mode) {
-            currentMode = mode;
-            document.getElementById('headerMode').innerText = mode;
-            document.getElementById('emptyText').innerText = `Start chatting with ${mode}`;
-            document.getElementById('pillGeneral').classList.remove('active');
-            document.getElementById('pillProfessional').classList.remove('active');
-            document.getElementById(mode === 'General' ? 'pillGeneral' : 'pillProfessional').classList.add('active');
-            updatePGUI();
-        }
-
-        function newChat() {
-            currentSessionId = null;
-            localStorage.removeItem('current_session_id');
-            document.getElementById('activeChat').style.display = 'none';
-            document.getElementById('activeChat').innerHTML = '';
-            document.getElementById('emptyState').style.display = 'flex';
-            document.getElementById('chatInput').value = ''; 
-            document.getElementById('chatInput').style.height = 'auto'; 
-            if(document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
-        }
-
-        function toggleDebate() {
-            isDebateOn = !isDebateOn;
-            document.getElementById('debateToggle').checked = isDebateOn;
-        }
-
+        // =============================================
+        // 8. Send Message & Auto-Save Logic
+        // =============================================
         const chatInput = document.getElementById('chatInput');
         chatInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; });
 
@@ -491,10 +704,20 @@
             const input = document.getElementById('chatInput').value;
             if(!input.trim()) return;
 
-            document.getElementById('emptyState').style.display = 'none';
-            document.getElementById('activeChat').style.display = 'flex';
+            // Initiate Session if new
+            if (!currentSessionId) {
+                currentSessionId = 'session_' + Date.now();
+                // Auto Titling: Use the first 15-20 characters of the message
+                currentSessionTitle = input.substring(0, 20) + (input.length > 20 ? '...' : '');
+                localStorage.setItem('current_session_id', currentSessionId);
+                pgState = { locked: false, coreSpec: '', progress: [], activeFocus: '' };
+                // Reset UI for new session
+                document.getElementById('emptyState').style.display = 'none';
+                document.getElementById('activeChat').style.display = 'flex';
+            }
+
+            // Render User Message locally
             const chatContainer = document.getElementById('activeChat');
-            
             const userMsgDiv = document.createElement('div');
             userMsgDiv.className = 'message-row user';
             const userBubble = document.createElement('div');
@@ -502,7 +725,13 @@
             userBubble.textContent = input;
             userMsgDiv.appendChild(userBubble);
             chatContainer.appendChild(userMsgDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            // Save User Message to Memory & DB
+            currentMessages.push({ role: 'user', content: input });
+            await saveCurrentSession();
 
+            // Loading Indicator
             const loadingDiv = document.createElement('div');
             loadingDiv.className = 'message-row ai';
             loadingDiv.id = 'loadingMsg';
@@ -557,9 +786,8 @@
                     currentSessionId = data.sessionId;
                     localStorage.setItem('current_session_id', currentSessionId);
                 }
-
-                if(data.response && data.response.includes('Error:')) showToast(data.response, 'error');
-
+                
+                // Display AI Response
                 const aiMsgDiv = document.createElement('div');
                 aiMsgDiv.className = 'message-row ai';
                 const aiBubble = document.createElement('div');
@@ -587,6 +815,16 @@
                 chatContainer.appendChild(aiMsgDiv);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
 
+                // Save AI Response to Memory & DB
+                currentMessages.push({ role: 'assistant', content: data.response });
+                await saveCurrentSession();
+
+                // Update sidebar title if it's the first message and title was auto-generated
+                if (currentSessionTitle && currentMessages.length === 2) {
+                    // Title is already set on first user message
+                }
+                await loadSessions();
+
             } catch (error) {
                 clearTimeout(timeoutId); clearTimeout(wakeUpTimer);
                 document.getElementById('loadingMsg').remove();
@@ -596,7 +834,31 @@
             document.getElementById('chatInput').value = ''; document.getElementById('chatInput').style.height = 'auto';
         }
 
-        document.addEventListener('DOMContentLoaded', () => { updatePGUI(); loadSettingsUI(); });
+        // =============================================
+        // 9. Initialization
+        // =============================================
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Check Passcode first
+            checkPasscodeSetup();
+            
+            // Load UI components
+            loadSettingsUI();
+            await loadSessions();
+            
+            // Restore last session if exists
+            const savedId = localStorage.getItem('current_session_id');
+            if (savedId) {
+                // ✅ FIX: Check if ID is numeric, if not, search by string directly
+                const session = await db.sessions.get(isNaN(savedId) ? savedId : parseInt(savedId));
+                if (session) {
+                    await loadSession(session.id);
+                    return;
+                }
+            }
+            // If no session, start new chat
+            newChat();
+            updatePGUI();
+        });
     </script>
 </body>
 </html>
