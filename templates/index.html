@@ -48,33 +48,119 @@
         .message-bubble.ai { background: #1a1a1a; border: 1px solid #333; color: #e0e0e0; border-bottom-left-radius: 4px; white-space: pre-wrap; }
         .ai-actions { margin-top: 5px; display: flex; gap: 10px; font-size: 12px; color: #888; }
         .ai-actions span { cursor: pointer; user-select: none; }
-        
-        /* Input Area */
-        .input-area { position: relative; width: 100%; padding: 10px 15px; padding-bottom: max(15px, env(safe-area-inset-bottom)); background: #0f0f0f; border-top: 1px solid #222; display: flex; align-items: flex-end; gap: 10px; z-index: 10; }
-        .attach-outside { width: 32px; height: 32px; border-radius: 50%; background: transparent; border: none; color: #888; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-bottom: 5px; }
-        .input-container { flex-grow: 1; display: flex; flex-direction: column; background: #1e1e1e; border-radius: 24px; padding: 10px 16px; border: 1px solid #333; min-height: 100px; }
-        .input-top-row { display: flex; width: 100%; }
-        .input-top-row textarea { flex-grow: 1; background: transparent; border: none; color: #fff; outline: none; font-size: 16px; padding: 0; resize: none; overflow: hidden; min-height: 24px; max-height: 100px; line-height: 1.5; width: 100%; font-family: inherit; margin-top: 2px; }
-        .input-bottom-row { display: flex; align-items: center; justify-content: flex-end; margin-top: 8px; width: 100%; gap: 10px; }
 
-        /* PG Controls */
-        .pg-controls { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; width: 100%; }
-        .pg-btn { padding: 4px 12px; border-radius: 12px; border: 1px solid #444; background: #1a1a1a; color: #aaa; font-size: 12px; cursor: pointer; transition: 0.2s; }
-        .pg-btn.active { border-color: #4a90e2; color: #4a90e2; }
-        .pg-btn.locked { border-color: #4a90e2; background: #2a3a5a; color: #fff; }
+        /* Toast Container */
+        .toast-container { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 200; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+        .toast-item { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: slideIn 0.3s ease; pointer-events: auto; display: flex; justify-content: space-between; align-items: center; }
+        .toast-item.error { border-color: #ff4444; background: #2a1a1a; }
+        .toast-item.warning { border-color: #ffa500; background: #2a2a1a; }
+        .toast-item.success { border-color: #4caf50; background: #1b2e1b; }
+        .toast-close { cursor: pointer; color: #888; font-size: 16px; margin-left: 10px; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* Debate Toggle */
-        .debate-toggle { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #888; cursor: pointer; }
-        .toggle-switch { width: 30px; height: 16px; background: #333; border-radius: 10px; position: relative; cursor: pointer; transition: 0.2s; }
-        .toggle-switch.on { background: #4a90e2; }
-        .toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: #fff; border-radius: 50%; transition: 0.2s; }
-        .toggle-switch.on::after { left: 16px; }
-        
-        .send-btn { width: 32px; height: 32px; border-radius: 50%; background: #4a90e2; border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; flex-shrink: 0; }
-        .hidden { display: none !important; }
+        /* -------------------------------------------------- */
+        /* ✨ Gemini's Modern Clean Input Container Layout */
+        /* -------------------------------------------------- */
+        .input-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 32px);
+            max-width: 800px;
+            background: #18181b;
+            border: 1px solid #27272a;
+            border-radius: 18px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            z-index: 100;
+        }
+
+        /* PG Buttons Top Toolbar */
+        .pg-toolbar {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #27272a;
+        }
+
+        .pg-btn {
+            background: #27272a;
+            color: #a1a1aa;
+            border: 1px solid #3f3f46;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .pg-btn:hover {
+            background: #3f3f46;
+            color: #fff;
+        }
+
+        /* Clean Textarea */
+        .chat-textarea {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 15px;
+            resize: none;
+            outline: none;
+            min-height: 44px;
+            max-height: 150px;
+            font-family: inherit;
+        }
+
+        /* Bottom Action Bar (+ , Debate Toggle , Send Button) */
+        .input-bottom-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 4px;
+        }
+
+        .left-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .plus-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #27272a;
+            border: 1px solid #3f3f46;
+            color: #a1a1aa;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .send-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #3b82f6;
+            border: none;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
 
         /* Settings Modal */
-        /* ✅ Bug #2 Fixed: z-index increased to 9999 */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; display: none; justify-content: center; align-items: center; }
         .modal-overlay.open { display: flex; }
         .modal-content { background: #1e1e1e; width: 90%; max-width: 400px; border-radius: 16px; padding: 20px; border: 1px solid #333; max-height: 80vh; overflow-y: auto; }
@@ -91,15 +177,7 @@
         .key-tag { background: #2a2a2a; border: 1px solid #444; padding: 2px 8px; border-radius: 12px; font-size: 12px; color: #aaa; display: flex; align-items: center; gap: 5px; }
         .key-tag span { cursor: pointer; color: #ff4444; }
 
-        /* Toast Alert */
-        .toast-container { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 200; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
-        .toast-item { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: slideIn 0.3s ease; pointer-events: auto; display: flex; justify-content: space-between; align-items: center; }
-        .toast-item.error { border-color: #ff4444; background: #2a1a1a; }
-        .toast-item.warning { border-color: #ffa500; background: #2a2a1a; }
-        /* ✅ Bug #6 Fixed: Added success style */
-        .toast-item.success { border-color: #4caf50; background: #1b2e1b; }
-        .toast-close { cursor: pointer; color: #888; font-size: 16px; margin-left: 10px; }
-        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
@@ -155,7 +233,6 @@
         <div class="session-list" id="sessionList"></div>
         <div class="sidebar-footer">
             <span class="username">CEO User</span>
-            <!-- ✅ Bug #2 Fixed: Changed onclick to openSettingsFromSidebar() -->
             <span class="settings-btn" onclick="openSettingsFromSidebar()">•••</span>
         </div>
     </div>
@@ -184,28 +261,33 @@
             <div class="active-chat" id="activeChat"></div>
         </div>
 
-        <!-- Input Area -->
-        <div class="input-area">
-            <button class="attach-outside" onclick="document.getElementById('fileInput').click()">+</button>
-            <input type="file" id="fileInput" style="display:none">
+        <!-- ✨ Gemini's New Modern Input Bar -->
+        <div class="input-container">
+            <!-- 1. PG Buttons Toolbar (Top) -->
+            <div class="pg-toolbar" id="pgControls">
+                <button class="pg-btn" id="btnLock" onclick="lockPlan()">🔒 Lock Plan</button>
+                <button class="pg-btn" id="btnSync" onclick="syncPhase()">🔄 Sync / Next Phase</button>
+                <button class="pg-btn" id="btnEdit" onclick="editPlan()">✏️ Edit Plan</button>
+            </div>
 
-            <div class="input-container">
-                <!-- PG Controls -->
-                <div class="pg-controls" id="pgControls">
-                    <button class="pg-btn" id="btnLock" onclick="lockPlan()">🔒 Lock Plan</button>
-                    <button class="pg-btn" id="btnSync" onclick="syncPhase()">🔄 Sync / Next Phase</button>
-                    <button class="pg-btn" id="btnEdit" onclick="editPlan()">🔓 Edit Plan</button>
-                </div>
-                <div class="input-top-row">
-                    <textarea id="chatInput" rows="1" placeholder="Type a message or hold to speak"></textarea>
-                </div>
-                <div class="input-bottom-row">
-                    <div class="debate-toggle" onclick="toggleDebate()">
+            <!-- 2. Clean Message Input Area (Middle) - ID fixed to 'chatInput' -->
+            <textarea id="chatInput" class="chat-textarea" placeholder="Type a message or hold to speak..." rows="1"></textarea>
+
+            <!-- 3. Integrated Bottom Actions Bar (Bottom) -->
+            <div class="input-bottom-bar">
+                <div class="left-actions">
+                    <!-- File Upload Logic attached to Plus Button -->
+                    <button class="plus-btn" onclick="document.getElementById('fileInput').click()">+</button>
+                    <input type="file" id="fileInput" style="display:none">
+                    
+                    <!-- Debate Toggle switch modified to match the JS logic -->
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #a1a1aa; cursor: pointer;" onclick="toggleDebate()">
                         <span>Debate</span>
-                        <div class="toggle-switch" id="debateSwitch"></div>
+                        <input type="checkbox" id="debateToggle" style="width: 16px; height: 16px; accent-color: #3b82f6; cursor: pointer;">
                     </div>
-                    <button class="send-btn" onclick="sendMessage()">➤</button>
                 </div>
+                
+                <button class="send-btn" onclick="sendMessage()">➤</button>
             </div>
         </div>
     </div>
@@ -227,7 +309,6 @@
             }
         }
 
-        // ✅ Bug #2 Fixed: Function to close sidebar first
         function openSettingsFromSidebar() {
             document.getElementById('sidebar').classList.remove('open');
             document.getElementById('overlay').classList.remove('open');
@@ -324,7 +405,6 @@
         }
 
         // ------------- PG Logic -------------
-        // ✅ Bug #1 Fixed: Added mode check and display logic
         function updatePGUI() {
             const pgControls = document.getElementById('pgControls');
             if(currentMode === 'Professional') {
@@ -378,7 +458,6 @@
             document.getElementById('appContainer').classList.toggle('sidebar-open');
         }
 
-        // ✅ Bug #1 Fixed: Added updatePGUI() at the end
         function setMode(mode) {
             currentMode = mode;
             document.getElementById('headerMode').innerText = mode;
@@ -399,7 +478,7 @@
 
         function toggleDebate() {
             isDebateOn = !isDebateOn;
-            document.getElementById('debateSwitch').classList.toggle('on');
+            document.getElementById('debateToggle').checked = isDebateOn;
         }
 
         const chatInput = document.getElementById('chatInput');
@@ -416,7 +495,7 @@
             }
         });
 
-        // ✅ Bug #7 Fixed: File Upload Event Listener
+        // File Upload
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('fileInput').addEventListener('change', function(e) {
                 const file = e.target.files[0];
@@ -483,7 +562,6 @@
                 });
                 clearTimeout(timeoutId); clearTimeout(wakeUpTimer);
 
-                // ✅ Bug #5 Fixed: API Error Handling check
                 if (!response.ok) {
                     throw new Error(`Server Error: ${response.status}`);
                 }
@@ -508,7 +586,6 @@
 
                 const downloadSpan = document.createElement('span');
                 downloadSpan.textContent = '📥 Download';
-                // ✅ Bug #4 Fixed: Actual file download logic
                 downloadSpan.onclick = () => {
                     const blob = new Blob([data.response], { type: 'text/plain' });
                     const url = URL.createObjectURL(blob);
