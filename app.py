@@ -11,22 +11,21 @@ app = Flask(__name__)
 CORS(app)
 
 # ============================================
-# 1. Model & Endpoint Configuration (2026 Active)
+# 1. Built-in Provider Configuration (Hardcoded Fallback)
 # ============================================
-PROVIDER_CONFIG = {
+BUILTIN_PROVIDERS = {
     "deepseek":   {"base_url": "https://api.deepseek.com",           "model": "deepseek-chat"},
     "github":     {"base_url": "https://models.github.ai/inference", "model": "gpt-4o-mini"},
     "groq":       {"base_url": "https://api.groq.com/openai/v1",     "model": "llama-3.3-70b-versatile"},
     "openrouter": {"base_url": "https://openrouter.ai/api/v1",       "model": "deepseek/deepseek-r1:free"},
 }
-# ✅ Fixed back to the correct 2026 model
 GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
 
 # ============================================
-# 2. Helper Functions to Create Clients
+# 2. Helper Functions
 # ============================================
 def get_openai_client(provider, api_key):
-    config = PROVIDER_CONFIG.get(provider)
+    config = BUILTIN_PROVIDERS.get(provider)
     if config:
         return OpenAI(api_key=api_key, base_url=config["base_url"])
     return None
@@ -35,9 +34,9 @@ def get_gemini_client(api_key):
     return genai.Client(api_key=api_key)
 
 # ============================================
-# 3. Universal AI Call Function (Handles Custom Models)
+# 3. Universal AI Call Functions
 # ============================================
-def call_ai(prompt, provider, api_key, custom_model=None):
+def call_builtin_ai(prompt, provider, api_key, custom_model=None):
     if not api_key:
         return f"Error: No API key provided for {provider}."
     try:
@@ -48,7 +47,7 @@ def call_ai(prompt, provider, api_key, custom_model=None):
             return resp.text.strip()
         else:
             client = get_openai_client(provider, api_key)
-            config = PROVIDER_CONFIG.get(provider)
+            config = BUILTIN_PROVIDERS.get(provider)
             if not client or not config:
                 return f"Error: {provider} configuration issue."
             model_name = custom_model or config["model"]
@@ -61,46 +60,90 @@ def call_ai(prompt, provider, api_key, custom_model=None):
     except Exception as e:
         return f"Error ({provider}): {str(e)}"
 
+# ✅ NEW: Dynamic Custom Provider Call (Gemini's suggestion)
+def call_custom_ai(base_url, api_key, model_name, prompt):
+    if not base_url or not api_key or not model_name:
+        return "Error: Custom provider configuration incomplete."
+    try:
+        url = f"{base_url.rstrip('/')}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": prompt}]
+        }
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
+        return response.json()['choices'][0]['message']['content']
+    except Exception as e:
+        return f"Custom Provider Error: {str(e)}"
+
 # ============================================
-# 4. Parallel Debate Engine (Supports Multi-Keys)
+# 4. Parallel Debate Engine (Supports Built-in + Custom)
 # ============================================
-def debate_parallel(prompt, api_keys):
+def debate_parallel(prompt, builtin_keys, custom_providers):
     tasks = []
-    for provider, keys in api_keys.items():
+    # 1. Add Built-in Agents
+    for provider, keys in builtin_keys.items():
         if isinstance(keys, list):
             for idx, key in enumerate(keys):
-                tasks.append((provider, key, f"{provider}-Agent-{idx+1}"))
+                tasks.append({
+                    "type": "builtin",
+                    "provider": provider,
+                    "api_key": key,
+                    "label": f"{provider}-Agent-{idx+1}"
+                })
+    # 2. Add Custom Agents
+    for idx, cp in enumerate(custom_providers):
+        if cp.get('api_key') and cp.get('base_url') and cp.get('model'):
+            tasks.append({
+                "type": "custom",
+                "base_url": cp['base_url'],
+                "api_key": cp['api_key'],
+                "model": cp['model'],
+                "label": cp.get('name', f'Custom-Agent-{idx+1}')
+            })
 
     if not tasks:
-        return {"System": "Error: No active API keys found."}
-    
+        return {"System": "Error: No active AI agents found."}
+
     with ThreadPoolExecutor(max_workers=min(len(tasks), 10)) as executor:
-        future_to_task = {
-            executor.submit(call_ai, prompt, provider, key): agent_label 
-            for provider, key, agent_label in tasks
-        }
+        future_to_task = {}
+        for task in tasks:
+            if task["type"] == "builtin":
+                future_to_task[executor.submit(call_builtin_ai, prompt, task["provider"], task["api_key"])] = task["label"]
+            else:
+                future_to_task[executor.submit(call_custom_ai, task["base_url"], task["api_key"], task["model"], prompt)] = task["label"]
         
         results = {}
         for future in as_completed(future_to_task):
-            agent_label = future_to_task[future]
+            label = future_to_task[future]
             try:
-                results[agent_label] = future.result()
+                results[label] = future.result()
             except Exception as e:
-                results[agent_label] = f"Error: {str(e)}"
+                results[label] = f"Error: {str(e)}"
         return results
 
 # ============================================
 # 5. Justice AI (Recommendation Mode - Debate OFF)
 # ============================================
-def justice_ai_recommendation(debate_results, original_prompt, api_keys, justice_provider, justice_key):
+def justice_ai_recommendation(debate_results, original_prompt, api_keys, custom_providers, justice_provider, justice_key):
+    # Helper to get a valid key for Justice
     if not justice_key:
+        # Try built-in first
         for p in ["gemini", "deepseek", "groq", "github", "openrouter"]:
             if p in api_keys and isinstance(api_keys[p], list) and len(api_keys[p]) > 0:
                 justice_provider = p
                 justice_key = api_keys[p][0]
                 break
-        if not justice_key:
-            return "Justice AI Error: No valid API key provided or available in pool."
+        # If no built-in, try custom providers
+        if not justice_key and custom_providers:
+            justice_provider = "custom"
+            justice_key = custom_providers[0].get('api_key')
+            justice_model = custom_providers[0].get('model')
+            justice_url = custom_providers[0].get('base_url')
 
     formatted_responses = "\n\n".join([f"--- [{agent}] ---\n{resp[:1000]}" for agent, resp in debate_results.items()])
     
@@ -118,25 +161,27 @@ Task:
 2. Clearly state which AI Agent provided the BEST response and why.
 3. Present the winning response or a refined synthesis as your final recommendation."""
 
-    return call_ai(recommendation_prompt, justice_provider, justice_key)
+    if justice_provider == "custom":
+        return call_custom_ai(justice_url, justice_key, justice_model, recommendation_prompt)
+    else:
+        return call_builtin_ai(recommendation_prompt, justice_provider, justice_key)
 
 # ============================================
 # 6. Consensus Debate Engine (Debate ON)
 # ============================================
-def consensus_debate(prompt, api_keys):
+def consensus_debate(prompt, api_keys, custom_providers):
     # Round 1: Initial Answers
-    round1_results = debate_parallel(prompt, api_keys)
+    round1_results = debate_parallel(prompt, api_keys, custom_providers)
     formatted_r1 = "\n\n".join([f"[{agent}]: {resp}" for agent, resp in round1_results.items()])
     
     # Round 2: Cross-Critique
     critique_prompt = f"User Prompt: {prompt}\n\nReview these initial answers from other agents and provide constructive critique:\n\n{formatted_r1}"
-    critique_results = debate_parallel(critique_prompt, api_keys)
+    critique_results = debate_parallel(critique_prompt, api_keys, custom_providers)
     formatted_critiques = "\n\n".join([f"[{agent} Critique]: {resp}" for agent, resp in critique_results.items()])
     
     # Round 3: Refinement & Final Consensus
     consensus_prompt = f"User Prompt: {prompt}\n\nCritiques received:\n{formatted_critiques}\n\nPlease synthesize the absolute best, error-free consensus answer that incorporates all valid corrections."
-    
-    consensus_results = debate_parallel(consensus_prompt, api_keys)
+    consensus_results = debate_parallel(consensus_prompt, api_keys, custom_providers)
     
     for agent, text in consensus_results.items():
         if not text.startswith("Error:"):
@@ -157,9 +202,12 @@ def chat():
     mode = data.get('mode', 'General')
     user_message = data.get('message', '')
     debate_on = data.get('debateOn', False)
-    api_keys = data.get('apiKeys', {})
-    pg_state = data.get('pgState', {})
     
+    # New Dynamic Data Structure
+    api_keys = data.get('apiKeys', {})          # Built-in providers: {"gemini": ["key1"], ...}
+    custom_providers = data.get('customProviders', []) # Custom providers: [{"name": "Kimi", "base_url": "...", "api_key": "...", "model": "..."}]
+    
+    pg_state = data.get('pgState', {})
     pg_selector = data.get('pgSelector', {})
     justice_selector = data.get('justiceSelector', {})
 
@@ -182,12 +230,14 @@ def chat():
 
     try:
         if not debate_on:
-            debate_results = debate_parallel(full_prompt, api_keys)
+            # OFF: Multi-Agent + Justice AI Recommendation
+            debate_results = debate_parallel(full_prompt, api_keys, custom_providers)
             j_provider = justice_selector.get('provider', 'gemini')
             j_key = justice_selector.get('key', '')
-            ai_reply = justice_ai_recommendation(debate_results, full_prompt, api_keys, j_provider, j_key)
+            ai_reply = justice_ai_recommendation(debate_results, full_prompt, api_keys, custom_providers, j_provider, j_key)
         else:
-            ai_reply = consensus_debate(full_prompt, api_keys)
+            # ON: Multi-Agent Consensus Debate (No Justice AI)
+            ai_reply = consensus_debate(full_prompt, api_keys, custom_providers)
             
     except Exception as e:
         ai_reply = f"Error processing request: {str(e)}"
