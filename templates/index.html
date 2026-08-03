@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AI Architect</title>
     <style>
-        /* Base Styles (Same as previous) */
+        /* Base Styles */
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, sans-serif; }
         html, body { background-color: #0f0f0f; color: #ffffff; height: 100vh; height: -webkit-fill-available; width: 100vw; overflow: hidden; position: relative; }
+        
         .sidebar { position: fixed; top: 0; left: 0; width: 80%; max-width: 320px; height: 100%; background: #171717; z-index: 20; transform: translateX(-100%); transition: transform 0.3s ease; display: flex; flex-direction: column; padding: 20px; border-right: 1px solid #222; }
         .sidebar.open { transform: translateX(0); }
         .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 15; display: none; }
@@ -48,6 +49,7 @@
         .ai-actions { margin-top: 5px; display: flex; gap: 10px; font-size: 12px; color: #888; }
         .ai-actions span { cursor: pointer; user-select: none; }
 
+        /* Toast & Input */
         .toast-container { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 200; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
         .toast-item { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: slideIn 0.3s ease; pointer-events: auto; display: flex; justify-content: space-between; align-items: center; }
         .toast-item.error { border-color: #ff4444; background: #2a1a1a; }
@@ -56,37 +58,17 @@
         .toast-close { cursor: pointer; color: #888; font-size: 16px; margin-left: 10px; }
         @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* Modern Clean Input Container Layout */
-        .input-container {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: calc(100% - 32px);
-            max-width: 800px;
-            background: #18181b;
-            border: 1px solid #27272a;
-            border-radius: 18px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            z-index: 100;
-        }
-
+        .input-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: calc(100% - 32px); max-width: 800px; background: #18181b; border: 1px solid #27272a; border-radius: 18px; padding: 12px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); z-index: 100; }
         .pg-toolbar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; border-bottom: 1px solid #27272a; }
         .pg-btn { background: #27272a; color: #a1a1aa; border: 1px solid #3f3f46; padding: 5px 12px; border-radius: 20px; font-size: 12px; white-space: nowrap; cursor: pointer; transition: all 0.2s; }
         .pg-btn:hover { background: #3f3f46; color: #fff; }
-
         .chat-textarea { width: 100%; background: transparent; border: none; color: #fff; font-size: 15px; resize: none; outline: none; min-height: 44px; max-height: 150px; font-family: inherit; }
-
         .input-bottom-bar { display: flex; justify-content: space-between; align-items: center; padding-top: 4px; }
         .left-actions { display: flex; align-items: center; gap: 12px; }
         .plus-btn { width: 32px; height: 32px; border-radius: 50%; background: #27272a; border: 1px solid #3f3f46; color: #a1a1aa; font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         .send-btn { width: 36px; height: 36px; border-radius: 50%; background: #3b82f6; border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 
-        /* Settings Modal & Custom Provider */
+        /* Settings Modal */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; display: none; justify-content: center; align-items: center; }
         .modal-overlay.open { display: flex; }
         .modal-content { background: #1e1e1e; width: 90%; max-width: 400px; border-radius: 16px; padding: 20px; border: 1px solid #333; max-height: 80vh; overflow-y: auto; }
@@ -102,8 +84,6 @@
         .key-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
         .key-tag { background: #2a2a2a; border: 1px solid #444; padding: 2px 8px; border-radius: 12px; font-size: 12px; color: #aaa; display: flex; align-items: center; gap: 5px; }
         .key-tag span { cursor: pointer; color: #ff4444; }
-
-        /* Custom Provider UI */
         .custom-provider-group { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #333; }
         .custom-provider-group .input-row { display: flex; gap: 8px; margin-bottom: 6px; align-items: center; flex-wrap: wrap; }
         .custom-provider-group .input-row input { flex: 1; min-width: 120px; padding: 6px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff; font-size: 13px; }
@@ -124,12 +104,7 @@
             <span class="modal-close" onclick="toggleSettings()">✕</span>
             <div class="modal-title">🔑 API Keys & Configuration</div>
             <p style="font-size: 12px; color: #888; margin-bottom: 15px;">Keys stored in browser localStorage.</p>
-            
-            <div id="settingsContainer">
-                <!-- Built-in providers injected here -->
-            </div>
-
-            <!-- ✨ NEW: Custom Provider UI -->
+            <div id="settingsContainer"></div>
             <div class="settings-group" style="border-bottom: none;">
                 <label style="font-weight: bold;">🧩 Custom OpenAI-Compatible Providers</label>
                 <div class="custom-provider-group">
@@ -145,8 +120,6 @@
                 </div>
                 <div class="custom-provider-list" id="customProviderList"></div>
             </div>
-
-            <!-- PG / Justice Selectors (Optional: Select from custom list later) -->
             <div class="settings-group" style="border-bottom: none;">
                 <label style="font-weight: bold;">⚙️ Project Guardian (PG) Engine</label>
                 <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
@@ -162,7 +135,6 @@
                     </select>
                 </div>
             </div>
-
             <div class="settings-group" style="border-bottom: none;">
                 <label style="font-weight: bold;">⚖️ Justice AI Engine</label>
                 <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
@@ -215,7 +187,6 @@
             <div class="active-chat" id="activeChat"></div>
         </div>
 
-        <!-- Modern Input Bar -->
         <div class="input-container">
             <div class="pg-toolbar" id="pgControls">
                 <button class="pg-btn" id="btnLock" onclick="lockPlan()">🔒 Lock Plan</button>
@@ -227,6 +198,7 @@
                 <div class="left-actions">
                     <button class="plus-btn" onclick="document.getElementById('fileInput').click()">+</button>
                     <input type="file" id="fileInput" style="display:none">
+                    <button class="plus-btn" onclick="exportChat()" style="font-size: 14px; width: 32px; height: 32px;" title="Export as Markdown">📄</button>
                     <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #a1a1aa; cursor: pointer;" onclick="toggleDebate()">
                         <span>Debate</span>
                         <input type="checkbox" id="debateToggle" style="width: 16px; height: 16px; accent-color: #3b82f6; cursor: pointer;">
@@ -241,6 +213,7 @@
         // State
         let isDebateOn = false;
         let currentMode = 'General';
+        let currentSessionId = localStorage.getItem('current_session_id') || null;
         const PROVIDERS = ['deepseek', 'gemini', 'github', 'groq', 'openrouter'];
         let pgState = JSON.parse(localStorage.getItem('pg_state')) || { locked: false, coreSpec: '', progress: [], activeFocus: '' };
 
@@ -284,10 +257,9 @@
                 container.appendChild(div);
             });
             updateSelectorOptions();
-            loadCustomProvidersUI(); // ✅ Load custom providers
+            loadCustomProvidersUI();
         }
 
-        // ------------- Built-in Key Management -------------
         function addKey(provider) {
             const input = document.getElementById(`input_${provider}`);
             const val = input.value.trim();
@@ -306,7 +278,6 @@
             loadSettingsUI();
         }
 
-        // ------------- Custom Providers Management (NEW) -------------
         function loadCustomProvidersUI() {
             const list = document.getElementById('customProviderList');
             const providers = JSON.parse(localStorage.getItem('custom_providers')) || [];
@@ -324,13 +295,12 @@
             const key = document.getElementById('custom_key').value.trim();
             const model = document.getElementById('custom_model').value.trim();
             if(!name || !url || !key || !model) {
-                showToast('⚠️ Please fill in all fields for the custom provider.', 'error');
+                showToast('⚠️ Please fill in all fields.', 'error');
                 return;
             }
             let providers = JSON.parse(localStorage.getItem('custom_providers')) || [];
             providers.push({ name, base_url: url, api_key: key, model });
             localStorage.setItem('custom_providers', JSON.stringify(providers));
-            // Clear inputs
             document.getElementById('custom_name').value = '';
             document.getElementById('custom_url').value = '';
             document.getElementById('custom_key').value = '';
@@ -350,7 +320,6 @@
             return JSON.parse(localStorage.getItem('custom_providers')) || [];
         }
 
-        // ------------- Selector Updates -------------
         function updateSelectorOptions() {
             const pgProvider = document.getElementById('pgProvider');
             const pgKey = document.getElementById('pgKey');
@@ -384,7 +353,7 @@
             return { provider: document.getElementById('justiceProvider').value, key: document.getElementById('justiceKey').value };
         }
 
-        // ------------- Toast Alert -------------
+        // Toast
         function showToast(message, type = 'warning') {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
@@ -394,7 +363,7 @@
             setTimeout(() => { if(toast.parentElement) toast.remove(); }, 8000);
         }
 
-        // ------------- PG Logic -------------
+        // PG Logic
         function updatePGUI() {
             const pgControls = document.getElementById('pgControls');
             if(currentMode === 'Professional') { pgControls.style.display = 'flex'; } else { pgControls.style.display = 'none'; }
@@ -436,7 +405,30 @@
             }
         }
 
-        // ------------- Core UI -------------
+        async function exportChat() {
+            if(!currentSessionId) {
+                showToast('⚠️ No active session to export.', 'error');
+                return;
+            }
+            try {
+                const response = await fetch(`/api/export/${currentSessionId}`);
+                if(!response.ok) throw new Error('Export failed');
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ai_architect_session_${currentSessionId}.md`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                showToast('📄 Report downloaded successfully!', 'success');
+            } catch (err) {
+                showToast('❌ Export failed: ' + err.message, 'error');
+            }
+        }
+
+        // Core UI
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('open');
             document.getElementById('overlay').classList.toggle('open');
@@ -454,10 +446,13 @@
         }
 
         function newChat() {
+            currentSessionId = null;
+            localStorage.removeItem('current_session_id');
             document.getElementById('activeChat').style.display = 'none';
             document.getElementById('activeChat').innerHTML = '';
             document.getElementById('emptyState').style.display = 'flex';
-            document.getElementById('chatInput').value = ''; document.getElementById('chatInput').style.height = 'auto'; 
+            document.getElementById('chatInput').value = ''; 
+            document.getElementById('chatInput').style.height = 'auto'; 
             if(document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
         }
 
@@ -480,7 +475,6 @@
             }
         });
 
-        // File Upload
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('fileInput').addEventListener('change', function(e) {
                 const file = e.target.files[0];
@@ -493,7 +487,6 @@
             });
         });
 
-        // ------------- Send Message -------------
         async function sendMessage() {
             const input = document.getElementById('chatInput').value;
             if(!input.trim()) return;
@@ -541,10 +534,15 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        mode: currentMode, message: input, debateOn: isDebateOn,
-                        apiKeys: apiKeys, customProviders: customProviders,
+                        sessionId: currentSessionId,
+                        mode: currentMode, 
+                        message: input, 
+                        debateOn: isDebateOn,
+                        apiKeys: apiKeys, 
+                        customProviders: customProviders,
                         pgState: pgState,
-                        pgSelector: getPGSelector(), justiceSelector: getJusticeSelector()
+                        pgSelector: getPGSelector(), 
+                        justiceSelector: getJusticeSelector()
                     }),
                     signal: controller.signal
                 });
@@ -554,6 +552,11 @@
 
                 const data = await response.json();
                 document.getElementById('loadingMsg').remove();
+
+                if(data.sessionId) {
+                    currentSessionId = data.sessionId;
+                    localStorage.setItem('current_session_id', currentSessionId);
+                }
 
                 if(data.response && data.response.includes('Error:')) showToast(data.response, 'error');
 
@@ -593,7 +596,6 @@
             document.getElementById('chatInput').value = ''; document.getElementById('chatInput').style.height = 'auto';
         }
 
-        // Initialize
         document.addEventListener('DOMContentLoaded', () => { updatePGUI(); loadSettingsUI(); });
     </script>
 </body>
