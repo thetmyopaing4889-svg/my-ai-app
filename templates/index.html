@@ -254,7 +254,17 @@
         let currentSessionId = null;
         let currentSessionTitle = '';
         let currentMessages = [];
-        let pgState = { locked: false, coreSpec: '', progress: [], activeFocus: '' };
+         let pgState = { locked: false, coreSpec: '', progress: [], activeFocus: '' };
+         let pendingAttachment = null;
+         let isSending = false;
+         const MAX_ATTACHMENT_BYTES = 100 * 1024;
+         const SUPPORTED_TEXT_EXTENSIONS = new Set(['txt', 'py', 'js', 'ts', 'jsx', 'tsx', 'json', 'md', 'html', 'css', 'yaml', 'yml', 'csv']);
+
+         function escapeHtml(value) {
+             return String(value ?? '').replace(/[&<>"']/g, character => ({
+                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+             }[character]));
+         }
         const PROVIDERS = ['deepseek', 'gemini', 'github', 'groq', 'openrouter'];
 
         // =============================================
@@ -326,11 +336,20 @@
             }
             sessions.sort((a, b) => a.id.localeCompare(b.id) * -1); // newer first (timestamps sort)
             list.innerHTML = sessions.map(s => `
-                <div class="session-item" onclick="loadSession('${s.id}')">
-                    <span class="title">${s.title || 'Untitled'}</span>
-                    <span class="delete-btn" onclick="event.stopPropagation(); deleteSession('${s.id}')">🗑️</span>
+                <div class="session-item" data-session-id="${escapeHtml(s.id)}">
+                    <span class="title">${escapeHtml(s.title || 'Untitled')}</span>
+                    <span class="delete-btn" data-delete-session-id="${escapeHtml(s.id)}">🗑️</span>
                 </div>
             `).join('');
+            list.querySelectorAll('.session-item').forEach(item => {
+                item.addEventListener('click', () => loadSession(item.dataset.sessionId));
+            });
+            list.querySelectorAll('.delete-btn').forEach(button => {
+                button.addEventListener('click', event => {
+                    event.stopPropagation();
+                    deleteSession(button.dataset.deleteSessionId);
+                });
+            });
         }
 
         async function loadSession(id) {
@@ -340,7 +359,7 @@
                 return;
             }
             currentSessionId = session.id;
-            currentSessionTitle = session.title;
+            currentSessionTitle = session.title || 'Untitled';
             currentMode = session.mode || 'General';
             currentMessages = session.messages || [];
             pgState = session.pgState || { locked: false, coreSpec: '', progress: [], activeFocus: '' };
@@ -361,8 +380,10 @@
                 messages: currentMessages,
                 mode: currentMode,
                 pgState: pgState,
-                createdAt: new Date().toISOString()
+                createdAt: sessionData.createdAt || new Date().toISOString()
             };
+            const existing = await db.sessions.get(currentSessionId);
+            if (existing && existing.createdAt) sessionData.createdAt = existing.createdAt;
             await db.sessions.put(sessionData);
             await loadSessions();
         }
@@ -541,7 +562,13 @@
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
             toast.className = `toast-item ${type}`;
-            toast.innerHTML = `<span>${message}</span><span class="toast-close" onclick="this.parentElement.remove()">✕</span>`;
+             const text = document.createElement('span');
+             text.textContent = message;
+             const close = document.createElement('span');
+             close.className = 'toast-close';
+             close.textContent = '✕';
+             close.addEventListener('click', () => toast.remove());
+             toast.append(text, close);
             container.appendChild(toast);
             setTimeout(() => { if(toast.parentElement) toast.remove(); }, 8000);
         }
@@ -566,7 +593,7 @@
                         <button class="btn-add-key" onclick="addKey('${provider}')">+ Add</button>
                     </div>
                     <div class="key-list" id="list_${provider}">
-                        ${keys.map((k, i) => `<span class="key-tag">${k.substring(0, 8)}... <span onclick="removeKey('${provider}', ${i})">✕</span></span>`).join('')}
+                        ${keys.map((k, i) => `<span class="key-tag">${escapeHtml(k.substring(0, 8))}... <span onclick="removeKey('${provider}', ${i})">✕</span></span>`).join('')}
                     </div>
                 `;
                 container.appendChild(div);
@@ -574,9 +601,7 @@
             updateSelectorOptions();
             loadCustomProvidersUI();
             const savedHash = localStorage.getItem('passcode_hash');
-            if (savedHash) {
-                document.getElementById('newPasscode').value = '****';
-            }
+             if (savedHash) document.getElementById('newPasscode').placeholder = 'Leave blank to keep current passcode';
         }
 
         function addKey(provider) {
@@ -600,9 +625,9 @@
         function loadCustomProvidersUI() {
             const list = document.getElementById('customProviderList');
             const providers = JSON.parse(localStorage.getItem('custom_providers')) || [];
-            list.innerHTML = providers.map((p, i) => `
+             list.innerHTML = providers.map((p, i) => `
                 <div class="custom-provider-tag">
-                    <div><strong>${p.name}</strong> (${p.model}) - ${p.base_url}</div>
+                     <div><strong>${escapeHtml(p.name)}</strong> (${escapeHtml(p.model)}) - ${escapeHtml(p.base_url)}</div>
                     <span onclick="removeCustomProvider(${i})">✕</span>
                 </div>
             `).join('');
@@ -656,7 +681,7 @@
             const updateKeyDropdown = (providerSelect, keySelect) => {
                 const provider = providerSelect.value;
                 const keys = JSON.parse(localStorage.getItem(`keys_${provider}`)) || [];
-                keySelect.innerHTML = keys.map(k => `<option value="${k}">${k.substring(0, 8)}...</option>`).join('');
+                 keySelect.innerHTML = keys.map(k => `<option value="${escapeHtml(k)}">${escapeHtml(k.substring(0, 8))}...</option>`).join('');
                 if(keys.length === 0) keySelect.innerHTML = '<option value="">No keys available</option>';
             };
             pgProvider.onchange = () => updateKeyDropdown(pgProvider, pgKey);
@@ -689,21 +714,43 @@
             }
         });
 
-        document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('fileInput').addEventListener('change', function(e) {
+         document.addEventListener('DOMContentLoaded', function() {
+             document.getElementById('fileInput').addEventListener('change', function(e) {
                 const file = e.target.files[0];
-                if(file) {
-                    const input = document.getElementById('chatInput');
-                    input.value = `📎 ${file.name} ` + input.value;
-                    input.focus();
-                    showToast(`📎 File attached: ${file.name}`, 'success');
-                }
+                 if (!file) return;
+                 const extension = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
+                 if (!SUPPORTED_TEXT_EXTENSIONS.has(extension)) {
+                     pendingAttachment = null;
+                     e.target.value = '';
+                     showToast('Only text and code files can be attached.', 'error');
+                     return;
+                 }
+                 if (file.size > MAX_ATTACHMENT_BYTES) {
+                     pendingAttachment = null;
+                     e.target.value = '';
+                     showToast('Attached files must be 100 KB or smaller.', 'error');
+                     return;
+                 }
+                 const reader = new FileReader();
+                 reader.onload = () => {
+                     pendingAttachment = { name: file.name, extension, content: String(reader.result || '') };
+                     const input = document.getElementById('chatInput');
+                     const attachmentBlock = `\n\nAttached file: ${file.name}\n\`\`\`${extension}\n${pendingAttachment.content}\n\`\`\``;
+                     input.value = `${input.value}${attachmentBlock}`.trim();
+                     input.focus();
+                     showToast(`Attached: ${file.name}`, 'success');
+                 };
+                 reader.onerror = () => showToast('Could not read that file.', 'error');
+                 reader.readAsText(file);
             });
         });
 
         async function sendMessage() {
+             if (isSending) return;
             const input = document.getElementById('chatInput').value;
             if(!input.trim()) return;
+             isSending = true;
+             document.querySelector('.send-btn').disabled = true;
 
             // Initiate Session if new
             if (!currentSessionId) {
@@ -744,11 +791,14 @@
             if(Object.keys(apiKeys).length === 0 && customProviders.length === 0) {
                 document.getElementById('loadingMsg').remove();
                 showToast('⚠️ Please add at least one API Key or Custom Provider in Settings.', 'error');
+                 isSending = false;
+                 document.querySelector('.send-btn').disabled = false;
                 return;
             }
 
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 60000);
+             const requestTimeout = currentMode === 'Professional' && isDebateOn ? 120000 : 40000;
+             const timeoutId = setTimeout(() => controller.abort(), requestTimeout);
             let wakeUpTimer = setTimeout(() => {
                 const loadMsg = document.getElementById('loadingMsg');
                 if(loadMsg) loadMsg.querySelector('.message-bubble.ai').textContent = '⏳ Server waking up...';
@@ -773,7 +823,14 @@
                 });
                 clearTimeout(timeoutId); clearTimeout(wakeUpTimer);
 
-                if (!response.ok) throw new Error(`Server Error: ${response.status}`);
+                 if (!response.ok) {
+                     let errorMessage = `Server Error: ${response.status}`;
+                     try {
+                         const errorData = await response.json();
+                         if (errorData.error) errorMessage = errorData.error;
+                     } catch (_) {}
+                     throw new Error(errorMessage);
+                 }
 
                 const data = await response.json();
                 document.getElementById('loadingMsg').remove();
@@ -820,7 +877,11 @@
                 if (error.name === 'AbortError') showToast('❌ Request timed out.', 'error');
                 else showToast('Error: ' + error.message, 'error');
             }
-            document.getElementById('chatInput').value = ''; document.getElementById('chatInput').style.height = 'auto';
+             document.getElementById('chatInput').value = ''; document.getElementById('chatInput').style.height = 'auto';
+             document.getElementById('fileInput').value = '';
+             pendingAttachment = null;
+             isSending = false;
+             document.querySelector('.send-btn').disabled = false;
         }
 
         // =============================================
