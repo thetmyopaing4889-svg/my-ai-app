@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AI Architect</title>
+    <meta name="description" content="Multi-agent AI command center">
+    <meta name="theme-color" content="#0b1115">
+    <meta name="application-name" content="AI Architect">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AI Architect">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="/icons/icon-192.png" type="image/png">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.11/dist/dexie.min.js"></script>
     <style>
         /* Same as before */
@@ -1328,6 +1338,14 @@
             newChat(false);
             updatePGUI();
         });
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
+                    // The app remains fully usable when service workers are unavailable.
+                });
+            });
+        }
     </script>
 </body>
 </html>

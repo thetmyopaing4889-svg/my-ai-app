@@ -4,7 +4,7 @@ import socket
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_from_directory
 from flask_cors import CORS
 from openai import OpenAI
 import google.genai as genai
@@ -567,6 +567,35 @@ def call_custom_ai(base_url, api_key, model_name, prompt, timeout=UPSTREAM_TIMEO
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+@app.route('/manifest.json')
+def manifest():
+    return send_from_directory(
+        app.root_path,
+        'manifest.json',
+        mimetype='application/manifest+json',
+        max_age=3600,
+    )
+
+
+@app.route('/sw.js')
+def service_worker():
+    return send_from_directory(
+        app.root_path,
+        'sw.js',
+        mimetype='application/javascript',
+        max_age=0,
+    )
+
+
+@app.route('/icons/<path:filename>')
+def app_icon(filename):
+    return send_from_directory(
+        os.path.join(app.root_path, 'icons'),
+        filename,
+        max_age=86400,
+    )
 
 
 @app.route('/healthz')
