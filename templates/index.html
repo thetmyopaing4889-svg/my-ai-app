@@ -190,6 +190,23 @@
         .pg-btn, .plus-btn, .debate-control { background: rgba(255,255,255,.035); border-color: var(--line); }
         .debate-control:has(input:checked) { color: #c6e9e4; border-color: rgba(130,201,194,.6); background: rgba(130,201,194,.12); }
         .pg-memory { border-color: var(--line); background: rgba(255,255,255,.025); }
+        .response-card { margin: 8px 0 12px; padding: 11px 12px; border: 1px solid rgba(176,195,204,.18); border-radius: 13px; background: linear-gradient(145deg, rgba(21,28,34,.96), rgba(12,17,21,.96)); }
+        .response-card.recommendation { border-color: rgba(215,168,92,.52); box-shadow: 0 0 0 1px rgba(215,168,92,.08), 0 10px 28px rgba(0,0,0,.16); }
+        .response-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+        .response-card-name { color: #e6eeeb; font-size: 12px; font-weight: 700; letter-spacing: .04em; }
+        .response-card.recommendation .response-card-name { color: var(--signal-bright); }
+        .response-card-provider { color: var(--muted); font-size: 10px; margin-top: 3px; }
+        .response-card-status { flex: 0 0 auto; color: #8ee2ad; font-size: 10px; font-weight: 700; white-space: nowrap; }
+        .response-card-status.unavailable { color: #f2a3a3; }
+        .response-card-track { width: 100%; height: 4px; margin: 7px 0 8px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.09); }
+        .response-card-progress { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #4cbd77, #a5e6b9); box-shadow: 0 0 10px rgba(76,189,119,.45); }
+        .response-card-progress.unavailable { background: #b75f67; box-shadow: none; }
+        .response-card-meta { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 10px; }
+        .response-card-credit { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .response-card-body { margin-top: 10px; color: #d7e0dd; font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .response-group-label { margin: 14px 0 7px; color: var(--cyan); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+        .response-card-actions { margin-top: 8px; display: flex; gap: 10px; color: #89979b; font-size: 11px; }
+        .response-card-actions span { cursor: pointer; }
         .sidebar { background: #0d1216; border-right-color: var(--line); }
         .search-bar { background: var(--panel-raised); border-color: var(--line); }
         .session-item { border-bottom-color: rgba(176,195,204,.1); }
@@ -366,6 +383,12 @@
         // 2. State Management
         // =============================================
         let isDebateOn = false;
+        let providerStatusCache = {};
+        try {
+            providerStatusCache = JSON.parse(localStorage.getItem('provider_status_cache') || '{}');
+        } catch (_) {
+            providerStatusCache = {};
+        }
         let currentMode = 'General';
         let currentSessionId = null;
         let currentSessionTitle = '';
@@ -538,11 +561,95 @@
                 row.className = `message-row ${msg.role}`;
                 const bubble = document.createElement('div');
                 bubble.className = `message-bubble ${msg.role}`;
-                bubble.textContent = msg.content;
+                if (msg.role === 'assistant' && msg.meta) {
+                    renderResponseCards(bubble, msg.meta);
+                } else {
+                    bubble.textContent = msg.content;
+                }
                 row.appendChild(bubble);
                 chatContainer.appendChild(row);
             });
             chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function makeResponseCard(card, isRecommendation = false) {
+            const cachedStatus = providerStatusCache[card.id] || providerStatusCache[card.provider] || null;
+            const wrapper = document.createElement('div');
+            wrapper.className = `response-card${isRecommendation ? ' recommendation' : ''}`;
+
+            const header = document.createElement('div');
+            header.className = 'response-card-header';
+            const identity = document.createElement('div');
+            const name = document.createElement('div');
+            name.className = 'response-card-name';
+            name.textContent = card.name || 'AI Provider';
+            identity.appendChild(name);
+            if (card.provider) {
+                const provider = document.createElement('div');
+                provider.className = 'response-card-provider';
+                provider.textContent = card.provider;
+                identity.appendChild(provider);
+            }
+            const status = document.createElement('div');
+            const connected = (cachedStatus?.status || card.status) === 'connected';
+            status.className = `response-card-status${connected ? '' : ' unavailable'}`;
+            const responsePercent = card.statusPercent ?? (connected ? 100 : 0);
+            status.textContent = `${card.statusLabel || (connected ? 'Response ready' : 'Request failed')} ${responsePercent}%`;
+            header.appendChild(identity);
+            header.appendChild(status);
+            wrapper.appendChild(header);
+
+            const track = document.createElement('div');
+            track.className = 'response-card-track';
+            const progress = document.createElement('div');
+            progress.className = `response-card-progress${connected ? '' : ' unavailable'}`;
+            progress.style.width = `${Math.max(0, Math.min(100, Number(card.statusPercent) || 0))}%`;
+            track.appendChild(progress);
+            wrapper.appendChild(track);
+
+            const meta = document.createElement('div');
+            meta.className = 'response-card-meta';
+            const credit = document.createElement('span');
+            credit.className = 'response-card-credit';
+            const cachedCredit = cachedStatus?.credit;
+            credit.textContent = `${cachedCredit?.label || card.credit?.label || 'Quota'}: ${cachedCredit?.value || card.credit?.value || 'Not exposed by provider API'}`;
+            meta.appendChild(credit);
+            if (card.error) {
+                const error = document.createElement('span');
+                error.textContent = 'Request failed';
+                meta.appendChild(error);
+            }
+            wrapper.appendChild(meta);
+
+            const body = document.createElement('div');
+            body.className = 'response-card-body';
+            body.textContent = card.response || card.error || 'No response returned.';
+            wrapper.appendChild(body);
+            return wrapper;
+        }
+
+        function renderResponseCards(container, meta) {
+            if (meta.agentAnswers?.length) {
+                const label = document.createElement('div');
+                label.className = 'response-group-label';
+                label.textContent = 'AI Responses';
+                container.appendChild(label);
+                meta.agentAnswers.forEach(card => container.appendChild(makeResponseCard(card)));
+            }
+            if (meta.peerReviews?.length) {
+                const label = document.createElement('div');
+                label.className = 'response-group-label';
+                label.textContent = 'Peer Reviews';
+                container.appendChild(label);
+                meta.peerReviews.forEach(card => container.appendChild(makeResponseCard(card)));
+            }
+            if (meta.recommendation) {
+                const label = document.createElement('div');
+                label.className = 'response-group-label';
+                label.textContent = meta.recommendation.name?.startsWith('Final') ? 'Final Answer' : 'Justice Recommendation';
+                container.appendChild(label);
+                container.appendChild(makeResponseCard(meta.recommendation, true));
+            }
         }
 
         function toggleSidebar() {
@@ -767,6 +874,8 @@
                 if (!response.ok) throw new Error(data.error || `Server Error: ${response.status}`);
                 statusBox.replaceChildren();
                 data.providers.forEach(provider => {
+                    providerStatusCache[provider.id] = provider;
+                    providerStatusCache[provider.provider] = provider;
                     const line = document.createElement('div');
                     line.textContent = `${provider.status === 'connected' ? '✅' : provider.status === 'configured' ? '⚙️' : '❌'} ${provider.id}: ${provider.detail}`;
                     statusBox.appendChild(line);
@@ -775,6 +884,8 @@
                 note.style.marginTop = '6px';
                 note.textContent = data.creditNote;
                 statusBox.appendChild(note);
+                localStorage.setItem('provider_status_cache', JSON.stringify(providerStatusCache));
+                renderChatHistory();
             } catch (error) {
                 statusBox.textContent = `Could not check providers: ${error.message}`;
             }
@@ -1143,7 +1254,16 @@
                 aiMsgDiv.className = 'message-row ai';
                 const aiBubble = document.createElement('div');
                 aiBubble.className = 'message-bubble ai';
-                aiBubble.textContent = data.response;
+                const responseMeta = {
+                    agentAnswers: data.agentAnswers || [],
+                    peerReviews: data.peerReviews || [],
+                    recommendation: data.recommendation || null
+                };
+                if (responseMeta.agentAnswers.length || responseMeta.peerReviews.length || responseMeta.recommendation) {
+                    renderResponseCards(aiBubble, responseMeta);
+                } else {
+                    aiBubble.textContent = data.response;
+                }
 
                 const actionsDiv = document.createElement('div');
                 actionsDiv.className = 'ai-actions';
@@ -1166,7 +1286,11 @@
                 chatContainer.appendChild(aiMsgDiv);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
 
-                currentMessages.push({ role: 'assistant', content: data.response });
+                currentMessages.push({
+                    role: 'assistant',
+                    content: data.response,
+                    meta: responseMeta
+                });
                 await saveCurrentSession();
                 await loadSessions();
                 await updateProjectMemory(input);

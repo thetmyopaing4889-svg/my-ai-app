@@ -211,6 +211,66 @@ def format_agent_answers(results):
     return "\n\n---\n\n".join(sections)
 
 
+PROVIDER_LABELS = {
+    "deepseek": "DeepSeek",
+    "gemini": "Gemini",
+    "groq": "Groq",
+    "openrouter": "OpenRouter",
+    "custom": "Custom AI",
+}
+
+
+def provider_label(provider):
+    return PROVIDER_LABELS.get(provider, provider.title())
+
+
+def agent_display_name(result):
+    provider = result.get("provider", "custom")
+    agent_id = result.get("id", "")
+    if provider == "custom":
+        return agent_id or "Custom AI"
+    suffix = agent_id.rsplit("-", 1)[-1] if "-" in agent_id else ""
+    return f"{provider_label(provider)} {suffix}" if suffix.isdigit() else provider_label(provider)
+
+
+def agent_card_data(result):
+    is_connected = bool(result.get("response"))
+    provider = result.get("provider", "custom")
+    return {
+        "id": result.get("id"),
+        "name": agent_display_name(result),
+        "provider": provider,
+        "status": "connected" if is_connected else "unavailable",
+        "statusPercent": 100 if is_connected else 0,
+        "statusLabel": "Response ready" if is_connected else "Request failed",
+        "credit": {
+            "label": "Credit" if provider == "deepseek" else "Quota",
+            "value": "Open Settings → Check connections" if provider == "deepseek" else "Not exposed by provider API",
+            "percent": None,
+        },
+        "response": result.get("response"),
+        "error": result.get("error"),
+    }
+
+
+def selected_agent_card(name, provider, response):
+    return {
+        "id": name.lower().replace(" ", "-"),
+        "name": f"{name} · {provider_label(provider)}",
+        "provider": provider,
+        "status": "connected",
+        "statusPercent": 100,
+        "statusLabel": "Response ready",
+        "credit": {
+            "label": "Credit" if provider == "deepseek" else "Quota",
+            "value": "Open Settings → Check connections" if provider == "deepseek" else "Not exposed by provider API",
+            "percent": None,
+        },
+        "response": response,
+        "error": None,
+    }
+
+
 def format_project_context(pg_state):
     pg_state = pg_state if isinstance(pg_state, dict) else {}
     core_spec = str(pg_state.get("coreSpec") or "None defined yet").strip()
@@ -291,6 +351,7 @@ def check_provider_status(agent):
                 "provider": agent["provider"],
                 "status": "configured",
                 "detail": "Custom provider saved. Live quota is not exposed by this app.",
+                "credit": {"label": "Quota", "value": "Check provider dashboard", "percent": None},
             }
         if agent["provider"] == "deepseek":
             response = requests.get(
@@ -315,6 +376,11 @@ def check_provider_status(agent):
                     if balances else
                     "Connected, but no balance amount was returned."
                 ),
+                "credit": {
+                    "label": "Credit",
+                    "value": ", ".join(balances) if balances else "No balance returned",
+                    "percent": None,
+                },
             }
         if agent["provider"] == "gemini":
             get_gemini_client(agent["key"]).models.list()
@@ -330,6 +396,11 @@ def check_provider_status(agent):
                 if agent["provider"] != "openrouter"
                 else "Connected. Credit balance requires an OpenRouter management key."
             ),
+            "credit": {
+                "label": "Quota",
+                "value": "OpenRouter management key required" if agent["provider"] == "openrouter" else "Check provider dashboard",
+                "percent": None,
+            },
         }
     except Exception:
         return {
@@ -337,6 +408,7 @@ def check_provider_status(agent):
             "provider": agent["provider"],
             "status": "unavailable",
             "detail": "Connection or API key check failed. Check the provider dashboard.",
+            "credit": {"label": "Quota", "value": "Unavailable", "percent": None},
         }
 
 
@@ -393,7 +465,7 @@ def run_peer_debate(question, mode, results, agents, chair_selector, api_keys, c
                 "The strongest available peer review is shown below.]"
                 f"\n\n{successful_reviews[0]}"
             )
-    return final_answer, candidate_answers, debate_answers
+    return final_answer, candidate_answers, debate_answers, debate_results
 
 
 def validate_custom_url(base_url):
@@ -618,8 +690,18 @@ def chat():
                 "## Justice AI Recommendation\n\n"
                 f"{recommendation}"
             )
+            justice_provider, _, _ = selector_for(
+                "justice",
+                data.get("justiceSelector"),
+                api_keys,
+                custom_providers,
+            )
+            response_payload = {
+                "agentAnswers": [agent_card_data(result) for result in initial_results],
+                "recommendation": selected_agent_card("Justice AI", justice_provider, recommendation),
+            }
         else:
-            final_answer, candidate_answers, debate_answers = run_peer_debate(
+            final_answer, candidate_answers, debate_answers, debate_results = run_peer_debate(
                 question_for_judging,
                 mode,
                 initial_results,
@@ -635,6 +717,17 @@ def chat():
                 "## Peer Review Details\n\n"
                 f"{debate_answers}"
             )
+            chair_provider, _, _ = selector_for(
+                "pg",
+                data.get("pgSelector"),
+                api_keys,
+                custom_providers,
+            )
+            response_payload = {
+                "agentAnswers": [agent_card_data(result) for result in initial_results],
+                "peerReviews": [agent_card_data(result) for result in debate_results],
+                "recommendation": selected_agent_card("Final Chair", chair_provider, final_answer),
+            }
     except ValueError as e:
         return error_response(str(e), 400)
     except AIServiceError as e:
@@ -644,7 +737,8 @@ def chat():
         "response": ai_reply,
         "mode": mode,
         "debateOn": debate_on,
-        "sessionId": session_id
+        "sessionId": session_id,
+        **response_payload,
     })
 
 # ✅ Export Route ကို ပြန်ပြင်ပါ။
