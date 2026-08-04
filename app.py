@@ -212,6 +212,27 @@ def format_agent_answers(results):
     return "\n\n---\n\n".join(sections)
 
 
+def format_project_context(pg_state):
+    pg_state = pg_state if isinstance(pg_state, dict) else {}
+    core_spec = str(pg_state.get("coreSpec") or "None defined yet").strip()
+    active_focus = str(pg_state.get("activeFocus") or "Not set").strip()
+    progress = pg_state.get("progress") or []
+    if not isinstance(progress, list):
+        progress = []
+    completed_phases = [
+        str(phase).strip() for phase in progress
+        if isinstance(phase, str) and phase.strip()
+    ]
+    completed_text = "\n".join(f"- {phase}" for phase in completed_phases) or "- None yet"
+    lock_status = "LOCKED — do not redefine the scope or plan." if pg_state.get("locked") else "UNLOCKED — the user may revise the plan."
+    return (
+        f"Lock status: {lock_status}\n"
+        f"Core specification:\n{clip_text(core_spec, MAX_PG_SUMMARY_LENGTH)}\n"
+        f"Completed phases:\n{completed_text}\n"
+        f"Active focus:\n{active_focus}"
+    )
+
+
 def summarize_project_memory(message, current_summary, pg_selector, api_keys, custom_providers):
     provider, key, custom = selector_for("pg", pg_selector, api_keys, custom_providers)
     prompt = (
@@ -464,12 +485,17 @@ def pg_summary():
 
     message = data.get("message")
     current_summary = data.get("currentSummary", "")
+    locked = data.get("locked", False)
     if not isinstance(message, str) or not message.strip():
         return error_response("Message must be a non-empty string.", 400)
     if len(message) > MAX_MESSAGE_LENGTH:
         return error_response(f"Message is too long (maximum {MAX_MESSAGE_LENGTH} characters).", 400)
     if not isinstance(current_summary, str):
         return error_response("currentSummary must be a string.", 400)
+    if not isinstance(locked, bool):
+        return error_response("locked must be a boolean.", 400)
+    if locked:
+        return jsonify({"summary": clip_text(current_summary, MAX_PG_SUMMARY_LENGTH), "locked": True})
 
     api_keys = data.get("apiKeys", {})
     custom_providers = data.get("customProviders", [])
@@ -531,12 +557,13 @@ def chat():
 
     try:
         agents = configured_agents(api_keys, custom_providers)
+        project_context = format_project_context(pg_state)
         initial_results = run_agents_parallel(
             agents,
             candidate_prompt(
                 user_message if mode == "General" else (
                     f"{user_message}\n\nProject context: "
-                    f"{pg_state.get('coreSpec', 'None defined yet')}"
+                    f"{project_context}"
                 ),
                 mode,
             ),
@@ -545,7 +572,7 @@ def chat():
         if mode == "Professional":
             question_for_judging = (
                 f"{user_message}\n\nProject context: "
-                f"{pg_state.get('coreSpec', 'None defined yet')}"
+                f"{project_context}"
             )
 
         if mode != "Professional" or not debate_on:

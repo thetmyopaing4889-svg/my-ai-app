@@ -471,6 +471,10 @@
 
         function lockPlan() {
             if(pgState.locked) return;
+            if(!pgState.coreSpec.trim()) {
+                showToast('⚠️ Send a Professional project message before locking the plan.', 'warning');
+                return;
+            }
             pgState.locked = true; 
             pgState.activeFocus = 'Phase 1: Initial Setup';
             updatePGUI();
@@ -491,10 +495,10 @@
 
         function editPlan() {
             if(!pgState.locked) return;
-            if(confirm("Unlock plan and reset progress?")) {
-                pgState.locked = false; pgState.coreSpec = ''; pgState.progress = []; pgState.activeFocus = '';
+            if(confirm("Unlock the plan and reset phase progress? Your Core Spec will be kept so you can revise it with the next Professional message.")) {
+                pgState.locked = false; pgState.progress = []; pgState.activeFocus = '';
                 updatePGUI();
-                showToast('🔓 Plan unlocked.', 'warning');
+                showToast('🔓 Plan unlocked. Progress reset; Core Spec kept for revision.', 'warning');
                 if (currentSessionId) saveCurrentSession();
             }
         }
@@ -503,9 +507,16 @@
             const pgControls = document.getElementById('pgControls');
             if(currentMode === 'Professional') { pgControls.style.display = 'flex'; } else { pgControls.style.display = 'none'; }
             const pgMemory = document.getElementById('pgMemory');
+            const progressText = pgState.progress.length
+                ? `\nCompleted: ${pgState.progress.join(' → ')}`
+                : '';
+            const focusText = pgState.activeFocus
+                ? `\nCurrent focus: ${pgState.activeFocus}`
+                : '';
+            const lockText = pgState.locked ? '\n🔒 Scope locked' : '\n🔓 Scope editable';
             pgMemory.textContent = pgState.coreSpec
-                ? `🧠 ${pgState.coreSpec}`
-                : 'Project memory is empty. Send a Professional message to update it.';
+                ? `🧠 ${pgState.coreSpec}${progressText}${focusText}${lockText}`
+                : `Project memory is empty. Send a Professional message to update it.${lockText}`;
             const btnLock = document.getElementById('btnLock');
             const btnSync = document.getElementById('btnSync');
             const btnEdit = document.getElementById('btnEdit');
@@ -658,6 +669,7 @@
                     body: JSON.stringify({
                         message,
                         currentSummary: pgState.coreSpec || '',
+                        locked: pgState.locked,
                         apiKeys: getApiKeysPayload(),
                         customProviders: getCustomProvidersPayload(),
                         pgSelector: getPGSelector()
