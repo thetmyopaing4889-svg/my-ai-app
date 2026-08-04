@@ -69,8 +69,10 @@
         @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
         .input-container { position: fixed; bottom: max(12px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: calc(100% - 32px); max-width: 800px; background: #18181b; border: 1px solid #27272a; border-radius: 18px; padding: 12px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); z-index: 100; }
-        .pg-toolbar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; border-bottom: 1px solid #27272a; }
-        .pg-btn { background: #27272a; color: #a1a1aa; border: 1px solid #3f3f46; padding: 5px 12px; border-radius: 20px; font-size: 12px; white-space: nowrap; cursor: pointer; transition: all 0.2s; }
+        .pg-toolbar { display: flex; flex-direction: column; gap: 8px; overflow: hidden; padding-bottom: 4px; border-bottom: 1px solid #27272a; }
+        .pg-actions { display: flex; gap: 8px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+        .pg-actions::-webkit-scrollbar { display: none; }
+        .pg-btn { flex: 0 0 auto; background: #27272a; color: #a1a1aa; border: 1px solid #3f3f46; padding: 8px 12px; border-radius: 12px; font-size: 12px; white-space: nowrap; cursor: pointer; transition: all 0.2s; }
         .pg-btn:hover { background: #3f3f46; color: #fff; }
         .chat-textarea { width: 100%; background: transparent; border: none; color: #fff; font-size: 15px; resize: none; outline: none; min-height: 44px; max-height: 150px; font-family: inherit; }
         .input-bottom-bar { display: flex; justify-content: space-between; align-items: center; padding-top: 4px; }
@@ -116,7 +118,7 @@
         .custom-provider-tag { background: #2a2a2a; border: 1px solid #444; padding: 6px 12px; border-radius: 12px; font-size: 12px; color: #aaa; display: flex; justify-content: space-between; align-items: center; }
         .custom-provider-tag span { cursor: pointer; color: #ff4444; margin-left: 8px; }
         .hidden { display: none !important; }
-        .pg-memory { width: 100%; max-width: 720px; color: #a1a1aa; font-size: 12px; line-height: 1.45; padding: 7px 10px; border: 1px solid #27272a; border-radius: 8px; background: #18181b; white-space: pre-wrap; overflow: hidden; max-height: 72px; }
+        .pg-memory { width: 100%; color: #a1a1aa; font-size: 12px; line-height: 1.45; padding: 7px 10px; border: 1px solid #27272a; border-radius: 8px; background: #18181b; white-space: pre-wrap; overflow: hidden; max-height: 64px; }
     </style>
 </head>
 <body>
@@ -236,9 +238,11 @@
 
         <div class="input-container">
             <div class="pg-toolbar" id="pgControls">
-                <button class="pg-btn" id="btnLock" onclick="lockPlan()">🔒 Lock Plan</button>
-                <button class="pg-btn" id="btnSync" onclick="syncPhase()">🔄 Sync / Next Phase</button>
-                <button class="pg-btn" id="btnEdit" onclick="editPlan()">✏️ Edit Plan</button>
+                <div class="pg-actions">
+                    <button class="pg-btn" id="btnLock" onclick="lockPlan()">🔒 Lock Plan</button>
+                    <button class="pg-btn" id="btnSync" onclick="syncPhase()">🔄 Sync / Next Phase</button>
+                    <button class="pg-btn" id="btnEdit" onclick="editPlan()">✏️ Edit Plan</button>
+                </div>
                 <div class="pg-memory" id="pgMemory">Project memory is empty.</div>
             </div>
             <textarea id="chatInput" class="chat-textarea" placeholder="Type a message or hold to speak..." rows="1"></textarea>
@@ -250,7 +254,7 @@
                     <button class="plus-btn" onclick="exportBackup()" title="Download all chats as backup" aria-label="Download all chats as backup">⬇</button>
                     <button class="plus-btn" onclick="document.getElementById('backupInput').click()" title="Restore chats from backup" aria-label="Restore chats from backup">⬆</button>
                     <input type="file" id="backupInput" accept="application/json,.json" style="display:none">
-                    <label class="debate-control" for="debateToggle" title="Turn peer debate on or off">
+                    <label class="debate-control" id="debateControl" for="debateToggle" title="Turn peer debate on or off">
                         <span>Debate</span>
                         <input type="checkbox" id="debateToggle" onchange="isDebateOn = this.checked;">
                     </label>
@@ -526,6 +530,8 @@
         function updatePGUI() {
             const pgControls = document.getElementById('pgControls');
             if(currentMode === 'Professional') { pgControls.style.display = 'flex'; } else { pgControls.style.display = 'none'; }
+            const debateControl = document.getElementById('debateControl');
+            debateControl.style.display = currentMode === 'Professional' ? 'flex' : 'none';
             const pgMemory = document.getElementById('pgMemory');
             const progressText = pgState.progress.length
                 ? `\nCompleted: ${pgState.progress.join(' → ')}`
