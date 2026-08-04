@@ -160,7 +160,6 @@
                     <select id="pgProvider" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff;">
                         <option value="gemini">Gemini (Built-in)</option>
                         <option value="deepseek">DeepSeek (Built-in)</option>
-                        <option value="github">GitHub Models (Built-in)</option>
                         <option value="groq">Groq (Built-in)</option>
                         <option value="openrouter">OpenRouter (Built-in)</option>
                     </select>
@@ -175,7 +174,6 @@
                     <select id="justiceProvider" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff;">
                         <option value="deepseek">DeepSeek (Built-in)</option>
                         <option value="gemini">Gemini (Built-in)</option>
-                        <option value="github">GitHub Models (Built-in)</option>
                         <option value="groq">Groq (Built-in)</option>
                         <option value="openrouter">OpenRouter (Built-in)</option>
                     </select>
@@ -275,7 +273,14 @@
                  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
              }[character]));
          }
-        const PROVIDERS = ['deepseek', 'gemini', 'github', 'groq', 'openrouter'];
+        const PROVIDERS = ['deepseek', 'gemini', 'groq', 'openrouter'];
+
+        function createSessionId() {
+            const suffix = typeof crypto.randomUUID === 'function'
+                ? crypto.randomUUID().replaceAll('-', '')
+                : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+            return `session_${Date.now()}_${suffix}`;
+        }
 
         // =============================================
         // 3. Passcode Logic (Native SHA-256)
@@ -713,7 +718,6 @@
             PROVIDERS.forEach(provider => {
                 const keys = JSON.parse(localStorage.getItem(`keys_${provider}`)) || [];
                 let label = provider.charAt(0).toUpperCase() + provider.slice(1);
-                if(provider === 'github') label = 'GitHub Models';
                 if(provider === 'openrouter') label = 'OpenRouter';
                 const div = document.createElement('div');
                 div.className = 'settings-group';
@@ -925,7 +929,7 @@
 
             // Initiate Session if new
             if (!currentSessionId) {
-                currentSessionId = 'session_' + Date.now(); // String ID
+                currentSessionId = createSessionId(); // String ID
                 currentSessionTitle = input.substring(0, 20) + (input.length > 20 ? '...' : '');
                 localStorage.setItem('current_session_id', currentSessionId);
                 pgState = { locked: false, coreSpec: '', progress: [], activeFocus: '' };

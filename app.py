@@ -1,9 +1,9 @@
 import os
 import ipaddress
 import socket
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse
-from datetime import datetime
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from openai import OpenAI
@@ -15,7 +15,6 @@ CORS(app)
 
 BUILTIN_PROVIDERS = {
     "deepseek":   {"base_url": "https://api.deepseek.com",           "model": "deepseek-chat"},
-    "github":     {"base_url": "https://models.github.ai/inference", "model": "gpt-4o-mini"},
     "groq":       {"base_url": "https://api.groq.com/openai/v1",     "model": "llama-3.3-70b-versatile"},
     "openrouter": {"base_url": "https://openrouter.ai/api/v1",       "model": "deepseek/deepseek-r1:free"},
 }
@@ -293,6 +292,30 @@ def check_provider_status(agent):
                 "status": "configured",
                 "detail": "Custom provider saved. Live quota is not exposed by this app.",
             }
+        if agent["provider"] == "deepseek":
+            response = requests.get(
+                "https://api.deepseek.com/user/balance",
+                headers={"Authorization": f"Bearer {agent['key']}", "Accept": "application/json"},
+                timeout=10,
+            )
+            response.raise_for_status()
+            balance_infos = response.json().get("balance_infos", [])
+            balances = []
+            for balance in balance_infos:
+                currency = balance.get("currency")
+                total = balance.get("total_balance")
+                if currency and total is not None:
+                    balances.append(f"{currency} {total}")
+            return {
+                "id": agent["id"],
+                "provider": agent["provider"],
+                "status": "connected",
+                "detail": (
+                    f"Balance: {', '.join(balances)}."
+                    if balances else
+                    "Connected, but no balance amount was returned."
+                ),
+            }
         if agent["provider"] == "gemini":
             get_gemini_client(agent["key"]).models.list()
         else:
@@ -302,7 +325,11 @@ def check_provider_status(agent):
             "id": agent["id"],
             "provider": agent["provider"],
             "status": "connected",
-            "detail": "API key accepted. Remaining credit is not exposed by this provider.",
+            "detail": (
+                "Connected. Check the provider dashboard for quota and billing."
+                if agent["provider"] != "openrouter"
+                else "Connected. Credit balance requires an OpenRouter management key."
+            ),
         }
     except Exception:
         return {
@@ -553,7 +580,7 @@ def chat():
         return error_response("sessionId must be a short string.", 400)
 
     if not session_id:
-        session_id = f"session_{int(datetime.now().timestamp())}"
+        session_id = f"session_{uuid.uuid4().hex}"
 
     try:
         agents = configured_agents(api_keys, custom_providers)
