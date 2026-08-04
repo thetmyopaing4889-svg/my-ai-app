@@ -257,7 +257,7 @@
          let pgState = { locked: false, coreSpec: '', progress: [], activeFocus: '' };
          let pendingAttachment = null;
          let isSending = false;
-         const MAX_ATTACHMENT_BYTES = 100 * 1024;
+         const MAX_ATTACHMENT_BYTES = 90 * 1024;
          const SUPPORTED_TEXT_EXTENSIONS = new Set(['txt', 'py', 'js', 'ts', 'jsx', 'tsx', 'json', 'md', 'html', 'css', 'yaml', 'yml', 'csv']);
 
          function escapeHtml(value) {
@@ -374,16 +374,15 @@
 
         async function saveCurrentSession() {
             if (!currentSessionId) return;
+            const existing = await db.sessions.get(currentSessionId);
             const sessionData = {
                 id: currentSessionId,
                 title: currentSessionTitle || 'New Chat',
                 messages: currentMessages,
                 mode: currentMode,
                 pgState: pgState,
-                createdAt: sessionData.createdAt || new Date().toISOString()
+                createdAt: (existing && existing.createdAt) || new Date().toISOString()
             };
-            const existing = await db.sessions.get(currentSessionId);
-            if (existing && existing.createdAt) sessionData.createdAt = existing.createdAt;
             await db.sessions.put(sessionData);
             await loadSessions();
         }
@@ -678,12 +677,44 @@
             const pgKey = document.getElementById('pgKey');
             const justiceProvider = document.getElementById('justiceProvider');
             const justiceKey = document.getElementById('justiceKey');
+            const addCustomProviderOptions = providerSelect => {
+                const selected = providerSelect.value;
+                providerSelect.querySelectorAll('option[data-custom-provider]').forEach(option => option.remove());
+                const customProviders = getCustomProvidersPayload();
+                customProviders.forEach(provider => {
+                    const option = document.createElement('option');
+                    option.value = `custom:${provider.name}`;
+                    option.textContent = `${provider.name} (Custom)`;
+                    option.dataset.customProvider = 'true';
+                    providerSelect.appendChild(option);
+                });
+                if (Array.from(providerSelect.options).some(option => option.value === selected)) {
+                    providerSelect.value = selected;
+                }
+            };
             const updateKeyDropdown = (providerSelect, keySelect) => {
                 const provider = providerSelect.value;
+                if (provider.startsWith('custom:')) {
+                    const customName = provider.slice('custom:'.length);
+                    const customProvider = getCustomProvidersPayload()
+                        .find(item => item.name === customName);
+                    keySelect.innerHTML = '';
+                    if (customProvider) {
+                        const option = document.createElement('option');
+                        option.value = customProvider.api_key;
+                        option.textContent = `${customProvider.api_key.substring(0, 8)}...`;
+                        keySelect.appendChild(option);
+                    } else {
+                        keySelect.innerHTML = '<option value="">No keys available</option>';
+                    }
+                    return;
+                }
                 const keys = JSON.parse(localStorage.getItem(`keys_${provider}`)) || [];
                  keySelect.innerHTML = keys.map(k => `<option value="${escapeHtml(k)}">${escapeHtml(k.substring(0, 8))}...</option>`).join('');
                 if(keys.length === 0) keySelect.innerHTML = '<option value="">No keys available</option>';
             };
+            addCustomProviderOptions(pgProvider);
+            addCustomProviderOptions(justiceProvider);
             pgProvider.onchange = () => updateKeyDropdown(pgProvider, pgKey);
             justiceProvider.onchange = () => updateKeyDropdown(justiceProvider, justiceKey);
             updateKeyDropdown(pgProvider, pgKey);
@@ -691,10 +722,14 @@
         }
 
         function getPGSelector() {
-            return { provider: document.getElementById('pgProvider').value, key: document.getElementById('pgKey').value };
+            const provider = document.getElementById('pgProvider').value;
+            const key = document.getElementById('pgKey').value;
+            return key ? { provider, key } : null;
         }
         function getJusticeSelector() {
-            return { provider: document.getElementById('justiceProvider').value, key: document.getElementById('justiceKey').value };
+            const provider = document.getElementById('justiceProvider').value;
+            const key = document.getElementById('justiceKey').value;
+            return key ? { provider, key } : null;
         }
 
         // =============================================
@@ -773,7 +808,16 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
             
             currentMessages.push({ role: 'user', content: input });
-            await saveCurrentSession();
+            try {
+                await saveCurrentSession();
+            } catch (error) {
+                currentMessages.pop();
+                userMsgDiv.remove();
+                showToast('Could not save this session locally.', 'error');
+                isSending = false;
+                document.querySelector('.send-btn').disabled = false;
+                return;
+            }
 
             const loadingDiv = document.createElement('div');
             loadingDiv.className = 'message-row ai';
@@ -873,7 +917,8 @@
 
             } catch (error) {
                 clearTimeout(timeoutId); clearTimeout(wakeUpTimer);
-                document.getElementById('loadingMsg').remove();
+                const loadingMsg = document.getElementById('loadingMsg');
+                if (loadingMsg) loadingMsg.remove();
                 if (error.name === 'AbortError') showToast('❌ Request timed out.', 'error');
                 else showToast('Error: ' + error.message, 'error');
             }

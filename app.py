@@ -83,18 +83,28 @@ def validate_request_data(data):
 
 def selector_for(provider_name, selector, api_keys, custom_providers):
     """Resolve a selected built-in/custom provider, with a safe legacy fallback."""
-    if selector and selector.get("provider"):
+    if selector and selector.get("provider") and selector.get("key"):
         selected_provider = selector["provider"]
-        selected_key = selector.get("key")
+        selected_key = selector["key"]
+        custom_name = (
+            selected_provider[len("custom:"):]
+            if selected_provider.startswith("custom:")
+            else selected_provider
+        )
+        if selected_provider.startswith("custom:"):
+            for custom_provider in custom_providers:
+                if custom_provider.get("name") == custom_name:
+                    if selected_key == custom_provider["api_key"]:
+                        return "custom", selected_key, custom_provider
+                    break
         if selected_provider in api_keys:
             keys = api_keys[selected_provider]
             if selected_key in keys:
                 return selected_provider, selected_key, None
-            raise ValueError(f"No matching key selected for {selected_provider}.")
+            # A stale dropdown value should not block a valid configured agent.
         for custom_provider in custom_providers:
-            if custom_provider.get("name") == selected_provider:
+            if custom_provider.get("name") == custom_name:
                 return "custom", custom_provider["api_key"], custom_provider
-        raise ValueError(f"Selected provider is not configured: {selected_provider}.")
 
     for provider, keys in api_keys.items():
         if keys:
@@ -208,12 +218,18 @@ def run_justice_recommendation(question, mode, results, justice_selector, api_ke
         f"Mode: {mode}\n\n"
         f"Candidate answers:\n{candidate_answers}"
     )
-    recommendation = call_provider(
-        prompt,
-        justice_provider,
-        justice_key,
-        justice_custom,
-    )
+    try:
+        recommendation = call_provider(
+            prompt,
+            justice_provider,
+            justice_key,
+            justice_custom,
+        )
+    except (ValueError, AIServiceError):
+        recommendation = (
+            "[Justice AI could not complete the recommendation. "
+            "The candidate answers above are still available for review.]"
+        )
     return recommendation, candidate_answers
 
 
@@ -228,8 +244,15 @@ def run_peer_debate(question, mode, results, agents, chair_selector, api_keys, c
         f"Mode: {mode}\n\n"
         f"Candidate answers:\n{candidate_answers}"
     )
-    debate_results = run_agents_parallel(agents, debate_prompt)
-    debate_answers = format_agent_answers(debate_results)
+    try:
+        debate_results = run_agents_parallel(agents, debate_prompt)
+        debate_answers = format_agent_answers(debate_results)
+    except AIServiceError:
+        debate_results = []
+        debate_answers = (
+            "[Peer review could not be completed. "
+            "The initial candidate answers are still available for review.]"
+        )
 
     # A configured agent chairs the final consensus round; Justice is deliberately not used.
     chair_provider, chair_key, chair_custom = selector_for(
@@ -243,12 +266,26 @@ def run_peer_debate(question, mode, results, agents, chair_selector, api_keys, c
         f"Original user request:\n{question}\n\n"
         f"Peer reviews:\n{debate_answers}"
     )
-    final_answer = call_provider(
-        final_prompt,
-        chair_provider,
-        chair_key,
-        chair_custom,
-    )
+    successful_reviews = [result["response"] for result in debate_results if result["response"]]
+    if not successful_reviews:
+        final_answer = (
+            "[Peer debate final synthesis was unavailable. "
+            "Review the initial candidate answers above.]"
+        )
+    else:
+        try:
+            final_answer = call_provider(
+                final_prompt,
+                chair_provider,
+                chair_key,
+                chair_custom,
+            )
+        except (ValueError, AIServiceError):
+            final_answer = (
+                "[The selected PG chair could not complete the final synthesis. "
+                "The strongest available peer review is shown below.]"
+                f"\n\n{successful_reviews[0]}"
+            )
     return final_answer, candidate_answers, debate_answers
 
 
@@ -287,7 +324,10 @@ def get_openai_client(provider, api_key):
     return None
 
 def get_gemini_client(api_key):
-    return genai.Client(api_key=api_key)
+    return genai.Client(
+        api_key=api_key,
+        http_options=genai.types.HttpOptions(timeout=UPSTREAM_TIMEOUT_SECONDS * 1000),
+    )
 
 def call_ai(prompt, provider, api_key, custom_model=None, timeout=UPSTREAM_TIMEOUT_SECONDS):
     if not api_key:
