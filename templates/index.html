@@ -101,6 +101,7 @@
         .custom-provider-tag { background: #2a2a2a; border: 1px solid #444; padding: 6px 12px; border-radius: 12px; font-size: 12px; color: #aaa; display: flex; justify-content: space-between; align-items: center; }
         .custom-provider-tag span { cursor: pointer; color: #ff4444; margin-left: 8px; }
         .hidden { display: none !important; }
+        .pg-memory { width: 100%; max-width: 720px; color: #a1a1aa; font-size: 12px; line-height: 1.45; padding: 7px 10px; border: 1px solid #27272a; border-radius: 8px; background: #18181b; white-space: pre-wrap; overflow: hidden; max-height: 72px; }
     </style>
 </head>
 <body>
@@ -122,6 +123,11 @@
             <div class="modal-title">🔑 API Keys & Configuration</div>
             <p style="font-size: 12px; color: #888; margin-bottom: 15px;">Keys stored in browser localStorage.</p>
             <div id="settingsContainer"></div>
+            <div class="settings-group">
+                <label style="font-weight: bold;">📡 Provider Status / Credit</label>
+                <button class="btn-add-key" onclick="checkProviderStatus()" style="padding: 8px 10px; border-radius: 6px; border: none; color: #fff; cursor: pointer;">Check connections</button>
+                <div id="providerStatus" style="font-size: 12px; color: #888; margin-top: 8px;"></div>
+            </div>
 
             <!-- Passcode Section -->
             <div class="settings-group" style="border-bottom: none;">
@@ -220,6 +226,7 @@
                 <button class="pg-btn" id="btnLock" onclick="lockPlan()">🔒 Lock Plan</button>
                 <button class="pg-btn" id="btnSync" onclick="syncPhase()">🔄 Sync / Next Phase</button>
                 <button class="pg-btn" id="btnEdit" onclick="editPlan()">✏️ Edit Plan</button>
+                <div class="pg-memory" id="pgMemory">Project memory is empty.</div>
             </div>
             <textarea id="chatInput" class="chat-textarea" placeholder="Type a message or hold to speak..." rows="1"></textarea>
             <div class="input-bottom-bar">
@@ -227,6 +234,9 @@
                     <button class="plus-btn" onclick="document.getElementById('fileInput').click()">+</button>
                     <input type="file" id="fileInput" style="display:none">
                     <button class="plus-btn" onclick="exportChat()" style="font-size: 14px; width: 32px; height: 32px;" title="Export as Markdown">📄</button>
+                    <button class="plus-btn" onclick="exportBackup()" style="font-size: 14px; width: 32px; height: 32px;" title="Export backup">⬇</button>
+                    <button class="plus-btn" onclick="document.getElementById('backupInput').click()" style="font-size: 14px; width: 32px; height: 32px;" title="Import backup">⬆</button>
+                    <input type="file" id="backupInput" accept="application/json,.json" style="display:none">
                     <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #a1a1aa; cursor: pointer;" onclick="toggleDebate()">
                         <span>Debate</span>
                         <input type="checkbox" id="debateToggle" style="width: 16px; height: 16px; accent-color: #3b82f6; cursor: pointer;">
@@ -492,6 +502,10 @@
         function updatePGUI() {
             const pgControls = document.getElementById('pgControls');
             if(currentMode === 'Professional') { pgControls.style.display = 'flex'; } else { pgControls.style.display = 'none'; }
+            const pgMemory = document.getElementById('pgMemory');
+            pgMemory.textContent = pgState.coreSpec
+                ? `🧠 ${pgState.coreSpec}`
+                : 'Project memory is empty. Send a Professional message to update it.';
             const btnLock = document.getElementById('btnLock');
             const btnSync = document.getElementById('btnSync');
             const btnEdit = document.getElementById('btnEdit');
@@ -552,6 +566,112 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             showToast('📄 Report downloaded successfully!', 'success');
+        }
+
+        async function exportBackup() {
+            const sessions = await db.sessions.toArray();
+            if (!sessions.length) {
+                showToast('⚠️ No sessions to back up.', 'error');
+                return;
+            }
+            const backup = {
+                schemaVersion: 1,
+                exportedAt: new Date().toISOString(),
+                currentSessionId,
+                sessions
+            };
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `ai_architect_backup_${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            showToast('⬇ Backup downloaded. API keys were not included.', 'success');
+        }
+
+        async function importBackup(file) {
+            try {
+                const backup = JSON.parse(await file.text());
+                if (!backup || backup.schemaVersion !== 1 || !Array.isArray(backup.sessions)) {
+                    throw new Error('Unsupported backup format.');
+                }
+                const validSessions = backup.sessions.filter(session =>
+                    session && typeof session.id === 'string' &&
+                    typeof session.title === 'string' &&
+                    Array.isArray(session.messages)
+                );
+                if (!validSessions.length) throw new Error('Backup has no valid sessions.');
+                const existingIds = new Set((await db.sessions.toArray()).map(session => session.id));
+                const sessionsToAdd = validSessions.filter(session => !existingIds.has(session.id));
+                if (!sessionsToAdd.length) {
+                    showToast('All backup sessions already exist.', 'warning');
+                    return;
+                }
+                await db.sessions.bulkPut(sessionsToAdd);
+                await loadSessions();
+                showToast(`⬆ Imported ${sessionsToAdd.length} session(s).`, 'success');
+            } catch (error) {
+                showToast(`Import failed: ${error.message}`, 'error');
+            } finally {
+                document.getElementById('backupInput').value = '';
+            }
+        }
+
+        async function checkProviderStatus() {
+            const statusBox = document.getElementById('providerStatus');
+            statusBox.textContent = 'Checking provider connections...';
+            try {
+                const response = await fetch('/api/provider-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        apiKeys: getApiKeysPayload(),
+                        customProviders: getCustomProvidersPayload()
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || `Server Error: ${response.status}`);
+                statusBox.replaceChildren();
+                data.providers.forEach(provider => {
+                    const line = document.createElement('div');
+                    line.textContent = `${provider.status === 'connected' ? '✅' : provider.status === 'configured' ? '⚙️' : '❌'} ${provider.id}: ${provider.detail}`;
+                    statusBox.appendChild(line);
+                });
+                const note = document.createElement('div');
+                note.style.marginTop = '6px';
+                note.textContent = data.creditNote;
+                statusBox.appendChild(note);
+            } catch (error) {
+                statusBox.textContent = `Could not check providers: ${error.message}`;
+            }
+        }
+
+        async function updateProjectMemory(message) {
+            if (currentMode !== 'Professional') return;
+            try {
+                const response = await fetch('/api/pg-summary', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message,
+                        currentSummary: pgState.coreSpec || '',
+                        apiKeys: getApiKeysPayload(),
+                        customProviders: getCustomProvidersPayload(),
+                        pgSelector: getPGSelector()
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || `Server Error: ${response.status}`);
+                pgState.coreSpec = data.summary;
+                await saveCurrentSession();
+                updatePGUI();
+                showToast('🧠 Project Guardian memory updated.', 'success');
+            } catch (error) {
+                showToast(`PG memory was not updated: ${error.message}`, 'warning');
+            }
         }
 
         // =============================================
@@ -778,6 +898,10 @@
                  reader.onerror = () => showToast('Could not read that file.', 'error');
                  reader.readAsText(file);
             });
+            document.getElementById('backupInput').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) importBackup(file);
+            });
         });
 
         async function sendMessage() {
@@ -914,6 +1038,7 @@
                 currentMessages.push({ role: 'assistant', content: data.response });
                 await saveCurrentSession();
                 await loadSessions();
+                await updateProjectMemory(input);
 
             } catch (error) {
                 clearTimeout(timeoutId); clearTimeout(wakeUpTimer);

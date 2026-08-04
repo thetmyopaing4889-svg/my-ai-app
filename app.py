@@ -23,6 +23,7 @@ GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
 MAX_MESSAGE_LENGTH = 100_000
 UPSTREAM_TIMEOUT_SECONDS = 30
 MAX_CONTEXT_RESPONSE_LENGTH = 30_000
+MAX_PG_SUMMARY_LENGTH = 12_000
 
 
 class AIServiceError(Exception):
@@ -31,6 +32,29 @@ class AIServiceError(Exception):
 
 def error_response(message, status):
     return jsonify({"error": message}), status
+
+
+def validate_provider_config(api_keys, custom_providers):
+    if not isinstance(api_keys, dict):
+        raise ValueError("apiKeys must be an object.")
+    for provider, keys in api_keys.items():
+        if provider not in BUILTIN_PROVIDERS and provider != "gemini":
+            raise ValueError(f"Unsupported provider: {provider}.")
+        if not isinstance(keys, list) or not keys or any(
+            not isinstance(key, str) or not key.strip() for key in keys
+        ):
+            raise ValueError(f"API keys for {provider} must be a non-empty string array.")
+
+    if not isinstance(custom_providers, list):
+        raise ValueError("customProviders must be an array.")
+    for provider in custom_providers:
+        if not isinstance(provider, dict):
+            raise ValueError("Each custom provider must be an object.")
+        if any(
+            not isinstance(provider.get(field), str) or not provider[field].strip()
+            for field in ("name", "base_url", "api_key", "model")
+        ):
+            raise ValueError("Each custom provider needs name, base_url, api_key, and model.")
 
 
 def validate_request_data(data):
@@ -51,23 +75,8 @@ def validate_request_data(data):
         raise ValueError("debateOn must be a boolean.")
 
     api_keys = data.get("apiKeys", {})
-    if not isinstance(api_keys, dict):
-        raise ValueError("apiKeys must be an object.")
-    for provider, keys in api_keys.items():
-        if provider not in BUILTIN_PROVIDERS and provider != "gemini":
-            raise ValueError(f"Unsupported provider: {provider}.")
-        if not isinstance(keys, list) or not keys or any(not isinstance(key, str) or not key.strip() for key in keys):
-            raise ValueError(f"API keys for {provider} must be a non-empty string array.")
-
     custom_providers = data.get("customProviders", [])
-    if not isinstance(custom_providers, list):
-        raise ValueError("customProviders must be an array.")
-    for provider in custom_providers:
-        if not isinstance(provider, dict):
-            raise ValueError("Each custom provider must be an object.")
-        if any(not isinstance(provider.get(field), str) or not provider[field].strip()
-               for field in ("base_url", "api_key", "model")):
-            raise ValueError("Each custom provider needs base_url, api_key, and model.")
+    validate_provider_config(api_keys, custom_providers)
 
     pg_state = data.get("pgState", {})
     if not isinstance(pg_state, dict):
@@ -203,6 +212,25 @@ def format_agent_answers(results):
     return "\n\n---\n\n".join(sections)
 
 
+def summarize_project_memory(message, current_summary, pg_selector, api_keys, custom_providers):
+    provider, key, custom = selector_for("pg", pg_selector, api_keys, custom_providers)
+    prompt = (
+        "You are Project Guardian for a personal AI coding workspace. Convert the user's "
+        "latest message into a concise English project-memory update. Preserve only durable "
+        "facts: project goals, architecture decisions, constraints, completed work, and "
+        "next steps. Merge it with the existing memory, remove obsolete contradictions, and "
+        "return only the updated summary in plain text. Do not include secrets, API keys, "
+        "conversation chatter, or explanations about this instruction.\n\n"
+        f"Existing project memory:\n{current_summary or '(none)'}\n\n"
+        f"Latest user message:\n{message}"
+    )
+    summary = call_provider(prompt, provider, key, custom)
+    summary = clip_text(summary, MAX_PG_SUMMARY_LENGTH).strip()
+    if not summary:
+        raise AIServiceError("Project Guardian returned an empty summary.")
+    return summary
+
+
 def run_justice_recommendation(question, mode, results, justice_selector, api_keys, custom_providers):
     justice_provider, justice_key, justice_custom = selector_for(
         "justice", justice_selector, api_keys, custom_providers
@@ -231,6 +259,37 @@ def run_justice_recommendation(question, mode, results, justice_selector, api_ke
             "The candidate answers above are still available for review.]"
         )
     return recommendation, candidate_answers
+
+
+def check_provider_status(agent):
+    """Check authentication/connectivity without exposing keys or claiming a balance."""
+    try:
+        if agent["provider"] == "custom":
+            validate_custom_url(agent["custom"]["base_url"])
+            return {
+                "id": agent["id"],
+                "provider": agent["provider"],
+                "status": "configured",
+                "detail": "Custom provider saved. Live quota is not exposed by this app.",
+            }
+        if agent["provider"] == "gemini":
+            get_gemini_client(agent["key"]).models.list()
+        else:
+            client = get_openai_client(agent["provider"], agent["key"])
+            client.models.list()
+        return {
+            "id": agent["id"],
+            "provider": agent["provider"],
+            "status": "connected",
+            "detail": "API key accepted. Remaining credit is not exposed by this provider.",
+        }
+    except Exception:
+        return {
+            "id": agent["id"],
+            "provider": agent["provider"],
+            "status": "unavailable",
+            "detail": "Connection or API key check failed. Check the provider dashboard.",
+        }
 
 
 def run_peer_debate(question, mode, results, agents, chair_selector, api_keys, custom_providers):
@@ -393,6 +452,64 @@ def index():
 @app.route('/healthz')
 def healthz():
     return jsonify({"status": "ok"})
+
+
+@app.route('/api/pg-summary', methods=['POST'])
+def pg_summary():
+    if not request.is_json:
+        return error_response("Request must use application/json.", 400)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return error_response("Request body must be a JSON object.", 400)
+
+    message = data.get("message")
+    current_summary = data.get("currentSummary", "")
+    if not isinstance(message, str) or not message.strip():
+        return error_response("Message must be a non-empty string.", 400)
+    if len(message) > MAX_MESSAGE_LENGTH:
+        return error_response(f"Message is too long (maximum {MAX_MESSAGE_LENGTH} characters).", 400)
+    if not isinstance(current_summary, str):
+        return error_response("currentSummary must be a string.", 400)
+
+    api_keys = data.get("apiKeys", {})
+    custom_providers = data.get("customProviders", [])
+    selector = data.get("pgSelector")
+    if selector is not None and not isinstance(selector, dict):
+        return error_response("pgSelector must be an object.", 400)
+    try:
+        validate_provider_config(api_keys, custom_providers)
+        summary = summarize_project_memory(
+            message,
+            clip_text(current_summary, MAX_PG_SUMMARY_LENGTH),
+            selector,
+            api_keys,
+            custom_providers,
+        )
+        return jsonify({"summary": summary})
+    except ValueError as error:
+        return error_response(str(error), 400)
+    except AIServiceError as error:
+        return error_response(str(error), 502)
+
+
+@app.route('/api/provider-status', methods=['POST'])
+def provider_status():
+    if not request.is_json:
+        return error_response("Request must use application/json.", 400)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return error_response("Request body must be a JSON object.", 400)
+    api_keys = data.get("apiKeys", {})
+    custom_providers = data.get("customProviders", [])
+    try:
+        validate_provider_config(api_keys, custom_providers)
+        agents = configured_agents(api_keys, custom_providers)
+        return jsonify({
+            "providers": [check_provider_status(agent) for agent in agents],
+            "creditNote": "Providers do not expose a reliable shared credit balance here; check their dashboards for exact quota.",
+        })
+    except ValueError as error:
+        return error_response(str(error), 400)
 
 
 @app.route('/api/chat', methods=['POST'])
