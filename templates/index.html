@@ -119,6 +119,91 @@
         .custom-provider-tag span { cursor: pointer; color: #ff4444; margin-left: 8px; }
         .hidden { display: none !important; }
         .pg-memory { width: 100%; color: #a1a1aa; font-size: 12px; line-height: 1.45; padding: 7px 10px; border: 1px solid #27272a; border-radius: 8px; background: #18181b; white-space: pre-wrap; overflow: hidden; max-height: 64px; }
+
+        /* AI Architect visual system — obsidian, signal amber, and quiet orbital motion */
+        :root {
+            --ink: #080a0d;
+            --panel: #10151a;
+            --panel-raised: #151c22;
+            --line: rgba(176, 195, 204, 0.16);
+            --muted: #82909a;
+            --soft: #c7d2d7;
+            --signal: #d7a85c;
+            --signal-bright: #f0c878;
+            --cyan: #82c9c2;
+        }
+        * { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        html, body { background: var(--ink); color: #edf3f2; }
+        body::before {
+            content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 1;
+            opacity: .32; background-image: radial-gradient(rgba(210,224,226,.13) .6px, transparent .6px);
+            background-size: 5px 5px; mask-image: linear-gradient(to bottom, #000, transparent 78%);
+        }
+        .app-container { background:
+            radial-gradient(ellipse at 50% -20%, rgba(95, 132, 132, .13), transparent 48%),
+            var(--ink); }
+        .app-container::after {
+            content: ""; position: absolute; left: 9%; right: 9%; top: 72px; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(215,168,92,.33), transparent);
+            pointer-events: none;
+        }
+        .header {
+            min-height: 64px; padding: 13px 18px; background: rgba(8,10,13,.82);
+            border-bottom: 1px solid var(--line); backdrop-filter: blur(18px);
+        }
+        .menu-btn { width: 34px; height: 34px; display: grid; place-items: center; color: var(--soft); font-size: 21px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.035); }
+        .header-center { line-height: 1.1; }
+        .header-title { letter-spacing: .12em; text-transform: uppercase; font-size: 12px; font-weight: 700; color: #e9eeeb; }
+        .header-mode { margin-top: 6px; color: var(--signal-bright); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
+        .new-chat-btn { border-color: rgba(215,168,92,.35); background: rgba(215,168,92,.08); color: var(--signal-bright); font-size: 19px; }
+        .chat-area { z-index: 2; }
+        .empty-state { position: relative; justify-content: center; padding: 28px 22px 180px; }
+        .empty-state::before {
+            content: ""; position: absolute; width: 250px; height: 250px; border-radius: 50%;
+            border: 1px solid rgba(130,201,194,.08); box-shadow: 0 0 0 34px rgba(130,201,194,.018), 0 0 0 70px rgba(215,168,92,.014);
+            animation: orbitBreath 8s ease-in-out infinite; pointer-events: none;
+        }
+        .intelligence-core {
+            position: relative; width: 112px; height: 112px; margin-bottom: 28px; display: grid; place-items: center;
+            isolation: isolate; filter: drop-shadow(0 0 26px rgba(130,201,194,.18));
+        }
+        .intelligence-core::before, .intelligence-core::after {
+            content: ""; position: absolute; border-radius: 50%; inset: 9px;
+            border: 1px solid rgba(130,201,194,.42); transform: rotate(45deg) scaleX(.72);
+            animation: coreSpin 12s linear infinite;
+        }
+        .intelligence-core::after { inset: 17px; border-color: rgba(215,168,92,.66); transform: rotate(-45deg) scaleY(.72); animation-direction: reverse; animation-duration: 9s; }
+        .core-shell { position: relative; width: 64px; height: 64px; border-radius: 50%; border: 1px solid rgba(232,242,238,.42); background: radial-gradient(circle at 36% 28%, #e5d09b 0 3%, #a98752 8%, #27434a 32%, #0d171b 70%); box-shadow: inset 0 0 18px rgba(130,201,194,.32), 0 0 0 7px rgba(215,168,92,.08); }
+        .core-shell::before { content: ""; position: absolute; inset: 18px; border: 1px solid rgba(223,241,237,.55); transform: rotate(45deg); }
+        .core-shell::after { content: ""; position: absolute; width: 5px; height: 5px; top: 11px; right: 13px; border-radius: 50%; background: var(--signal-bright); box-shadow: 0 0 12px var(--signal-bright); }
+        .empty-kicker { position: relative; margin-bottom: 10px; color: var(--cyan); font-size: 10px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; }
+        .empty-text { position: relative; margin-bottom: 9px; color: #f2f5f2; font-size: clamp(21px, 6vw, 28px); line-height: 1.12; letter-spacing: -.025em; font-weight: 650; }
+        .empty-hint { position: relative; max-width: 310px; margin-bottom: 25px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+        .mode-pills { position: relative; gap: 7px; padding: 4px; border: 1px solid var(--line); border-radius: 15px; background: rgba(255,255,255,.035); }
+        .pill-btn { min-width: 112px; padding: 9px 15px; border: 1px solid transparent; border-radius: 11px; color: #8f9ca2; font-size: 12px; letter-spacing: .04em; }
+        .pill-btn:hover { color: #e5ece9; background: rgba(255,255,255,.05); }
+        .pill-btn.active { background: linear-gradient(135deg, rgba(215,168,92,.25), rgba(130,201,194,.13)); border-color: rgba(215,168,92,.5); color: #f6e1b2; box-shadow: inset 0 1px rgba(255,255,255,.08); }
+        .input-container { background: rgba(16,21,26,.94); border-color: rgba(176,195,204,.22); box-shadow: 0 16px 48px rgba(0,0,0,.42), 0 0 0 1px rgba(255,255,255,.025); backdrop-filter: blur(16px); }
+        .chat-textarea::placeholder { color: #68777f; }
+        .send-btn { background: var(--signal); color: #15120c; box-shadow: 0 4px 16px rgba(215,168,92,.18); }
+        .send-btn:hover { background: var(--signal-bright); }
+        .pg-btn, .plus-btn, .debate-control { background: rgba(255,255,255,.035); border-color: var(--line); }
+        .debate-control:has(input:checked) { color: #c6e9e4; border-color: rgba(130,201,194,.6); background: rgba(130,201,194,.12); }
+        .pg-memory { border-color: var(--line); background: rgba(255,255,255,.025); }
+        .sidebar { background: #0d1216; border-right-color: var(--line); }
+        .search-bar { background: var(--panel-raised); border-color: var(--line); }
+        .session-item { border-bottom-color: rgba(176,195,204,.1); }
+        .session-item:hover { background: rgba(130,201,194,.07); }
+        .modal-content { background: #11171b; border-color: var(--line); }
+        @keyframes coreSpin { to { transform: rotate(405deg) scaleX(.72); } }
+        @keyframes orbitBreath { 0%, 100% { opacity: .65; transform: scale(.96); } 50% { opacity: 1; transform: scale(1.03); } }
+        @media (prefers-reduced-motion: reduce) {
+            .intelligence-core::before, .intelligence-core::after, .empty-state::before { animation: none; }
+        }
+        @media (min-width: 700px) {
+            .header { padding-inline: 28px; }
+            .empty-state { padding-bottom: 120px; }
+        }
     </style>
 </head>
 <body>
@@ -216,18 +301,22 @@
     <!-- Main App -->
     <div class="app-container" id="appContainer">
         <div class="header">
-            <div class="menu-btn" onclick="toggleSidebar()">☰</div>
+            <div class="menu-btn" onclick="toggleSidebar()" aria-label="Open session menu" role="button">☰</div>
             <div class="header-center">
                 <div class="header-title">AI Architect</div>
                 <div class="header-mode" id="headerMode">General</div>
             </div>
-            <div class="new-chat-btn" onclick="newChat()">+</div>
+            <div class="new-chat-btn" onclick="newChat()" aria-label="Start a new chat" role="button">+</div>
         </div>
 
         <div class="chat-area">
             <div class="empty-state" id="emptyState">
-                <div class="logo-placeholder">AI</div>
-                <div class="empty-text" id="emptyText">Start chatting with General</div>
+                <div class="intelligence-core" aria-label="AI Architect intelligence core" role="img">
+                    <div class="core-shell"></div>
+                </div>
+                <div class="empty-kicker">MULTI-AGENT COMMAND CENTER</div>
+                <div class="empty-text" id="emptyText">Open a line to General</div>
+                <div class="empty-hint" id="emptyHint">Ask once. Hear from every configured AI, then let Justice weigh the signal.</div>
                 <div class="mode-pills">
                     <div class="pill-btn active" id="pillGeneral" onclick="setMode('General')">General</div>
                     <div class="pill-btn" id="pillProfessional" onclick="setMode('Professional')">Professional</div>
@@ -480,7 +569,12 @@
         function setMode(mode) {
             currentMode = mode;
             document.getElementById('headerMode').innerText = mode;
-            document.getElementById('emptyText').innerText = `Start chatting with ${mode}`;
+            document.getElementById('emptyText').innerText = mode === 'Professional'
+                ? 'Open a line to Professional'
+                : 'Open a line to General';
+            document.getElementById('emptyHint').innerText = mode === 'Professional'
+                ? 'Shape the brief with Project Guardian, then invite a peer debate when the decision needs another angle.'
+                : 'Ask once. Hear from every configured AI, then let Justice weigh the signal.';
             document.getElementById('pillGeneral').classList.remove('active');
             document.getElementById('pillProfessional').classList.remove('active');
             document.getElementById(mode === 'General' ? 'pillGeneral' : 'pillProfessional').classList.add('active');
