@@ -60,7 +60,7 @@
         .ai-actions { margin-top: 5px; display: flex; gap: 10px; font-size: 12px; color: #888; }
         .ai-actions span { cursor: pointer; user-select: none; }
 
-        .toast-container { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 200; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+        .toast-container { position: fixed; bottom: 150px; left: 50%; transform: translateX(-50%); width: min(90%, 400px); z-index: 200; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
         .toast-item { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: slideIn 0.3s ease; pointer-events: auto; display: flex; justify-content: space-between; align-items: center; }
         .toast-item.error { border-color: #ff4444; background: #2a1a1a; }
         .toast-item.warning { border-color: #ffa500; background: #2a2a1a; }
@@ -68,15 +68,30 @@
         .toast-close { cursor: pointer; color: #888; font-size: 16px; margin-left: 10px; }
         @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-        .input-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: calc(100% - 32px); max-width: 800px; background: #18181b; border: 1px solid #27272a; border-radius: 18px; padding: 12px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); z-index: 100; }
+        .input-container { position: fixed; bottom: max(12px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: calc(100% - 32px); max-width: 800px; background: #18181b; border: 1px solid #27272a; border-radius: 18px; padding: 12px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); z-index: 100; }
         .pg-toolbar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; border-bottom: 1px solid #27272a; }
         .pg-btn { background: #27272a; color: #a1a1aa; border: 1px solid #3f3f46; padding: 5px 12px; border-radius: 20px; font-size: 12px; white-space: nowrap; cursor: pointer; transition: all 0.2s; }
         .pg-btn:hover { background: #3f3f46; color: #fff; }
         .chat-textarea { width: 100%; background: transparent; border: none; color: #fff; font-size: 15px; resize: none; outline: none; min-height: 44px; max-height: 150px; font-family: inherit; }
         .input-bottom-bar { display: flex; justify-content: space-between; align-items: center; padding-top: 4px; }
         .left-actions { display: flex; align-items: center; gap: 12px; }
-        .plus-btn { width: 32px; height: 32px; border-radius: 50%; background: #27272a; border: 1px solid #3f3f46; color: #a1a1aa; font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .plus-btn { width: 34px; height: 34px; border-radius: 50%; background: #27272a; border: 1px solid #3f3f46; color: #d4d4d8; font-size: 17px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex: 0 0 auto; }
+        .plus-btn:hover { background: #3f3f46; color: #fff; }
+        .debate-control { min-height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 9px; border: 1px solid #3f3f46; border-radius: 17px; color: #a1a1aa; font-size: 13px; cursor: pointer; user-select: none; white-space: nowrap; }
+        .debate-control:has(input:checked) { color: #dbeafe; border-color: #3b82f6; background: rgba(59, 130, 246, 0.16); }
+        .debate-control input { width: 16px; height: 16px; margin: 0; accent-color: #3b82f6; cursor: pointer; }
         .send-btn { width: 36px; height: 36px; border-radius: 50%; background: #3b82f6; border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .send-btn:hover { background: #2563eb; }
+
+        @media (max-width: 600px) {
+            .header { padding: 12px 14px; }
+            .active-chat { padding: 14px 12px; }
+            .input-container { width: calc(100% - 20px); padding: 10px; border-radius: 16px; }
+            .left-actions { gap: 6px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+            .left-actions::-webkit-scrollbar { display: none; }
+            .toast-container { bottom: 160px; }
+            .message-bubble { max-width: 92%; }
+        }
 
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; display: none; justify-content: center; align-items: center; }
         .modal-overlay.open { display: flex; }
@@ -229,16 +244,16 @@
             <textarea id="chatInput" class="chat-textarea" placeholder="Type a message or hold to speak..." rows="1"></textarea>
             <div class="input-bottom-bar">
                 <div class="left-actions">
-                    <button class="plus-btn" onclick="document.getElementById('fileInput').click()">+</button>
+                    <button class="plus-btn" onclick="document.getElementById('fileInput').click()" title="Attach a text or code file" aria-label="Attach a text or code file">+</button>
                     <input type="file" id="fileInput" style="display:none">
-                    <button class="plus-btn" onclick="exportChat()" style="font-size: 14px; width: 32px; height: 32px;" title="Export as Markdown">📄</button>
-                    <button class="plus-btn" onclick="exportBackup()" style="font-size: 14px; width: 32px; height: 32px;" title="Export backup">⬇</button>
-                    <button class="plus-btn" onclick="document.getElementById('backupInput').click()" style="font-size: 14px; width: 32px; height: 32px;" title="Import backup">⬆</button>
+                    <button class="plus-btn" onclick="exportChat()" title="Download this chat as Markdown" aria-label="Download this chat as Markdown">📄</button>
+                    <button class="plus-btn" onclick="exportBackup()" title="Download all chats as backup" aria-label="Download all chats as backup">⬇</button>
+                    <button class="plus-btn" onclick="document.getElementById('backupInput').click()" title="Restore chats from backup" aria-label="Restore chats from backup">⬆</button>
                     <input type="file" id="backupInput" accept="application/json,.json" style="display:none">
-                    <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #a1a1aa; cursor: pointer;" onclick="toggleDebate()">
+                    <label class="debate-control" for="debateToggle" title="Turn peer debate on or off">
                         <span>Debate</span>
-                        <input type="checkbox" id="debateToggle" style="width: 16px; height: 16px; accent-color: #3b82f6; cursor: pointer;">
-                    </div>
+                        <input type="checkbox" id="debateToggle" onchange="isDebateOn = this.checked;">
+                    </label>
                 </div>
                 <button class="send-btn" onclick="sendMessage()">➤</button>
             </div>
@@ -534,7 +549,7 @@
             }
         }
 
-        function newChat() {
+        function newChat(showNotification = true) {
             currentSessionId = null;
             currentSessionTitle = '';
             currentMessages = [];
@@ -548,7 +563,7 @@
             if(document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
             updatePGUI();
             loadSessions();
-            showToast('✨ New chat started.', 'success');
+            if (showNotification) showToast('✨ New chat started.', 'success');
         }
 
         // ✅ NEW: Export Chat directly from IndexedDB (Frontend-only)
@@ -1086,7 +1101,7 @@
                     return;
                 }
             }
-            newChat();
+            newChat(false);
             updatePGUI();
         });
     </script>
