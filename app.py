@@ -52,6 +52,8 @@ def explain_provider_error(provider, error):
         return f"{provider}: model or API endpoint was not found (HTTP 404)."
     if status_code == 429:
         return f"{provider}: rate limit or account quota was reached (HTTP 429)."
+    if provider == "gemini" and status_code == 400:
+        return f"{provider}: API key is invalid or Google rejected the request (HTTP 400)."
     if status_code is not None and 400 <= status_code < 500:
         return f"{provider}: provider rejected the request (HTTP {status_code})."
     if status_code is not None and status_code >= 500:
@@ -421,7 +423,25 @@ def check_provider_status(agent):
                 },
             }
         if agent["provider"] == "gemini":
-            get_gemini_client(agent["key"]).models.list()
+            # Use Google's key-authenticated REST endpoint. The SDK's models.list()
+            # can fail with an opaque RuntimeError and is not a reliable key check.
+            response = requests.get(
+                "https://generativelanguage.googleapis.com/v1beta/models",
+                params={"key": agent["key"]},
+                timeout=10,
+            )
+            response.raise_for_status()
+        elif agent["provider"] == "openrouter":
+            # OpenRouter's public /models endpoint does not validate credentials.
+            response = requests.get(
+                "https://openrouter.ai/api/v1/auth/key",
+                headers={
+                    "Authorization": f"Bearer {agent['key']}",
+                    "Accept": "application/json",
+                },
+                timeout=10,
+            )
+            response.raise_for_status()
         else:
             client = get_openai_client(agent["provider"], agent["key"])
             client.models.list()
