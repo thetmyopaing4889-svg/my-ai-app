@@ -50,6 +50,8 @@ def explain_provider_error(provider, error):
         return f"{provider}: API key is invalid, expired, or not permitted (HTTP {status_code})."
     if status_code == 404:
         return f"{provider}: model or API endpoint was not found (HTTP 404)."
+    if status_code == 402:
+        return f"{provider}: account has no usable credit or requires billing (HTTP 402)."
     if status_code == 429:
         return f"{provider}: rate limit or account quota was reached (HTTP 429)."
     if provider == "gemini" and status_code == 400:
@@ -382,7 +384,7 @@ def run_justice_recommendation(question, mode, results, justice_selector, api_ke
 
 
 def check_provider_status(agent):
-    """Check authentication/connectivity without exposing keys or claiming a balance."""
+    """Check whether the configured credential can actually be used by chat."""
     try:
         if agent["provider"] == "custom":
             validate_custom_url(agent["custom"]["base_url"])
@@ -390,6 +392,8 @@ def check_provider_status(agent):
                 "id": agent["id"],
                 "provider": agent["provider"],
                 "status": "configured",
+                "statusPercent": None,
+                "statusLabel": "Configured",
                 "detail": "Custom provider saved. Live quota is not exposed by this app.",
                 "credit": {"label": "Quota", "value": "Check provider dashboard", "percent": None},
             }
@@ -407,10 +411,35 @@ def check_provider_status(agent):
                 total = balance.get("total_balance")
                 if currency and total is not None:
                     balances.append(f"{currency} {total}")
+            has_credit = any(
+                float(balance.get("total_balance", 0) or 0) > 0
+                for balance in balance_infos
+                if balance.get("total_balance") is not None
+            )
+            balance_text = ", ".join(balances) if balances else "No balance returned"
+            if balance_infos and not has_credit:
+                return {
+                    "id": agent["id"],
+                    "provider": agent["provider"],
+                    "status": "needs_credit",
+                    "statusPercent": 0,
+                    "statusLabel": "Needs credit",
+                    "detail": (
+                        f"Connected, but the account has no usable credit ({balance_text}). "
+                        "Add DeepSeek balance before chatting."
+                    ),
+                    "credit": {
+                        "label": "Credit",
+                        "value": balance_text,
+                        "percent": 0,
+                    },
+                }
             return {
                 "id": agent["id"],
                 "provider": agent["provider"],
                 "status": "connected",
+                "statusPercent": 100,
+                "statusLabel": "Chat ready",
                 "detail": (
                     f"Balance: {', '.join(balances)}."
                     if balances else
@@ -418,19 +447,39 @@ def check_provider_status(agent):
                 ),
                 "credit": {
                     "label": "Credit",
-                    "value": ", ".join(balances) if balances else "No balance returned",
+                    "value": balance_text,
                     "percent": None,
                 },
             }
         if agent["provider"] == "gemini":
-            # Use Google's key-authenticated REST endpoint. The SDK's models.list()
-            # can fail with an opaque RuntimeError and is not a reliable key check.
+            # Use Google's key-authenticated REST endpoint and verify the exact
+            # model used by call_ai(), not just whether the key can list models.
             response = requests.get(
                 "https://generativelanguage.googleapis.com/v1beta/models",
                 params={"key": agent["key"]},
                 timeout=10,
             )
             response.raise_for_status()
+            models = response.json().get("models", [])
+            target_model = f"models/{GEMINI_DEFAULT_MODEL}"
+            target = next((model for model in models if model.get("name") == target_model), None)
+            if not target or "generateContent" not in target.get("supportedGenerationMethods", []):
+                return {
+                    "id": agent["id"],
+                    "provider": agent["provider"],
+                    "status": "model_unavailable",
+                    "statusPercent": 0,
+                    "statusLabel": "Model unavailable",
+                    "detail": (
+                        f"Gemini key connected, but {GEMINI_DEFAULT_MODEL} is not available "
+                        "for this key/project."
+                    ),
+                    "credit": {
+                        "label": "Model",
+                        "value": GEMINI_DEFAULT_MODEL,
+                        "percent": None,
+                    },
+                }
         elif agent["provider"] == "openrouter":
             # OpenRouter's public /models endpoint does not validate credentials.
             response = requests.get(
@@ -449,6 +498,8 @@ def check_provider_status(agent):
             "id": agent["id"],
             "provider": agent["provider"],
             "status": "connected",
+            "statusPercent": 100,
+            "statusLabel": "Chat ready",
             "detail": (
                 "Connected. Check the provider dashboard for quota and billing."
                 if agent["provider"] != "openrouter"
@@ -465,6 +516,8 @@ def check_provider_status(agent):
             "id": agent["id"],
             "provider": agent["provider"],
             "status": "unavailable",
+            "statusPercent": 0,
+            "statusLabel": "Unavailable",
             "detail": explain_provider_error(agent["provider"], error),
             "credit": {"label": "Quota", "value": "Unavailable", "percent": None},
         }

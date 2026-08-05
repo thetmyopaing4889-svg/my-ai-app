@@ -601,7 +601,13 @@
                 identity.appendChild(provider);
             }
             const status = document.createElement('div');
-            const connected = (cachedStatus?.status || card.status) === 'connected';
+            // The current chat result must override a stale settings cache:
+            // a key can be connected while this particular model/request fails.
+            const connected = card.response
+                ? true
+                : card.error
+                    ? false
+                    : (cachedStatus?.status || card.status) === 'connected';
             status.className = `response-card-status${connected ? '' : ' unavailable'}`;
             const responsePercent = card.statusPercent ?? (connected ? 100 : 0);
             status.textContent = `${card.statusLabel || (connected ? 'Response ready' : 'Request failed')} ${responsePercent}%`;
@@ -887,7 +893,16 @@
                     providerStatusCache[provider.id] = provider;
                     providerStatusCache[provider.provider] = provider;
                     const line = document.createElement('div');
-                    line.textContent = `${provider.status === 'connected' ? '✅' : provider.status === 'configured' ? '⚙️' : '❌'} ${provider.id}: ${provider.detail}`;
+                    const statusIcon = provider.status === 'connected'
+                        ? '✅'
+                        : provider.status === 'configured'
+                            ? '⚙️'
+                            : provider.status === 'needs_credit'
+                                ? '💳'
+                                : provider.status === 'model_unavailable'
+                                    ? '🧩'
+                                    : '❌';
+                    line.textContent = `${statusIcon} ${provider.id}: ${provider.detail}`;
                     statusBox.appendChild(line);
                 });
                 const note = document.createElement('div');
