@@ -256,6 +256,17 @@
                 <label style="font-weight: bold;">📡 Provider Status / Credit</label>
                 <button class="btn-add-key" onclick="checkProviderStatus()" style="padding: 8px 10px; border-radius: 6px; border: none; color: #fff; cursor: pointer;">Check connections</button>
                 <div id="providerStatus" style="font-size: 12px; color: #888; margin-top: 8px;"></div>
+                <div style="font-size: 12px; color: #8fc9bd; margin-top: 8px;">
+                    Free-first setup: Groq and Gemini free tiers, plus OpenRouter free models.
+                    DeepSeek API requires account balance.
+                </div>
+                <label style="display: flex; gap: 8px; align-items: center; margin-top: 10px; color: #ddd; font-size: 12px;">
+                    <input type="checkbox" id="includePaidProviders">
+                    Use paid DeepSeek API in chat
+                </label>
+                <div style="font-size: 11px; color: #888; margin-top: 4px;">
+                    Off by default. Enable only if your DeepSeek account has API credit.
+                </div>
             </div>
 
             <!-- Passcode Section -->
@@ -287,10 +298,10 @@
                 <label style="font-weight: bold;">⚙️ Project Guardian (PG) Engine</label>
                 <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
                     <select id="pgProvider" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff;">
-                        <option value="gemini">Gemini (Built-in)</option>
-                        <option value="deepseek">DeepSeek (Built-in)</option>
                         <option value="groq">Groq (Built-in)</option>
+                        <option value="gemini">Gemini (Built-in)</option>
                         <option value="openrouter">OpenRouter (Built-in)</option>
+                        <option value="deepseek">DeepSeek (Paid API)</option>
                     </select>
                     <select id="pgKey" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff;">
                         <option value="">Select Key...</option>
@@ -301,10 +312,10 @@
                 <label style="font-weight: bold;">⚖️ Justice AI Engine</label>
                 <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
                     <select id="justiceProvider" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff;">
-                        <option value="deepseek">DeepSeek (Built-in)</option>
-                        <option value="gemini">Gemini (Built-in)</option>
                         <option value="groq">Groq (Built-in)</option>
+                        <option value="gemini">Gemini (Built-in)</option>
                         <option value="openrouter">OpenRouter (Built-in)</option>
+                        <option value="deepseek">DeepSeek (Paid API)</option>
                     </select>
                     <select id="justiceKey" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff;">
                         <option value="">Select Key...</option>
@@ -928,7 +939,8 @@
                         locked: pgState.locked,
                         apiKeys: getApiKeysPayload(),
                         customProviders: getCustomProvidersPayload(),
-                        pgSelector: getPGSelector()
+                        pgSelector: getPGSelector(),
+                        includePaidProviders: includePaidProviders()
                     })
                 });
                 const data = await response.json();
@@ -969,7 +981,10 @@
             PROVIDERS.forEach(provider => {
                 const keys = JSON.parse(localStorage.getItem(`keys_${provider}`)) || [];
                 let label = provider.charAt(0).toUpperCase() + provider.slice(1);
-                if(provider === 'openrouter') label = 'OpenRouter';
+                if(provider === 'openrouter') label = 'OpenRouter (Free model available)';
+                if(provider === 'groq') label = 'Groq (Free tier)';
+                if(provider === 'gemini') label = 'Gemini (Free tier)';
+                if(provider === 'deepseek') label = 'DeepSeek (Paid API)';
                 const div = document.createElement('div');
                 div.className = 'settings-group';
                 div.innerHTML = `
@@ -986,6 +1001,11 @@
             });
             updateSelectorOptions();
             loadCustomProvidersUI();
+            const includePaidProviders = document.getElementById('includePaidProviders');
+            includePaidProviders.checked = localStorage.getItem('include_paid_providers') === 'true';
+            includePaidProviders.onchange = () => {
+                localStorage.setItem('include_paid_providers', String(includePaidProviders.checked));
+            };
             const savedHash = localStorage.getItem('passcode_hash');
              if (savedHash) document.getElementById('newPasscode').placeholder = 'Leave blank to keep current passcode';
         }
@@ -1119,6 +1139,10 @@
             return key ? { provider, key } : null;
         }
 
+        function includePaidProviders() {
+            return localStorage.getItem('include_paid_providers') === 'true';
+        }
+
         // =============================================
         // 8. Send Message & Auto-Save Logic
         // =============================================
@@ -1248,6 +1272,7 @@
                         mode: currentMode, 
                         message: input, 
                         debateOn: isDebateOn,
+                        includePaidProviders: includePaidProviders(),
                         apiKeys: apiKeys, 
                         customProviders: customProviders,
                         pgState: pgState,

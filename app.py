@@ -16,9 +16,17 @@ CORS(app)
 BUILTIN_PROVIDERS = {
     "deepseek":   {"base_url": "https://api.deepseek.com",           "model": "deepseek-chat"},
     "groq":       {"base_url": "https://api.groq.com/openai/v1",     "model": "llama-3.3-70b-versatile"},
-    "openrouter": {"base_url": "https://openrouter.ai/api/v1",       "model": "deepseek/deepseek-chat"},
+    "openrouter": {"base_url": "https://openrouter.ai/api/v1",       "model": "openai/gpt-oss-20b:free"},
 }
 GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
+GEMINI_FREE_MODEL_FALLBACKS = (
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
+)
+OPENROUTER_FREE_MODEL = "openai/gpt-oss-20b:free"
+FREE_FIRST_PROVIDER_ORDER = ("groq", "gemini", "openrouter", "deepseek")
 MAX_MESSAGE_LENGTH = 100_000
 UPSTREAM_TIMEOUT_SECONDS = 30
 MAX_CONTEXT_RESPONSE_LENGTH = 30_000
@@ -114,6 +122,8 @@ def validate_request_data(data):
 
     if not isinstance(data.get("debateOn", False), bool):
         raise ValueError("debateOn must be a boolean.")
+    if not isinstance(data.get("includePaidProviders", False), bool):
+        raise ValueError("includePaidProviders must be a boolean.")
 
     api_keys = data.get("apiKeys", {})
     custom_providers = data.get("customProviders", [])
@@ -128,7 +138,15 @@ def validate_request_data(data):
         if selector is not None and not isinstance(selector, dict):
             raise ValueError(f"{selector_name} must be an object.")
 
-    return message, mode, data.get("debateOn", False), api_keys, custom_providers, pg_state
+    return (
+        message,
+        mode,
+        data.get("debateOn", False),
+        data.get("includePaidProviders", False),
+        api_keys,
+        custom_providers,
+        pg_state,
+    )
 
 
 def selector_for(provider_name, selector, api_keys, custom_providers):
@@ -156,6 +174,12 @@ def selector_for(provider_name, selector, api_keys, custom_providers):
             if custom_provider.get("name") == custom_name:
                 return "custom", custom_provider["api_key"], custom_provider
 
+    # Prefer providers that have a usable free tier when no explicit selector
+    # is set. DeepSeek remains available as an optional paid provider.
+    for provider in FREE_FIRST_PROVIDER_ORDER:
+        keys = api_keys.get(provider, [])
+        if keys:
+            return provider, keys[0], None
     for provider, keys in api_keys.items():
         if keys:
             return provider, keys[0], None
@@ -165,10 +189,12 @@ def selector_for(provider_name, selector, api_keys, custom_providers):
     raise ValueError("No AI provider is configured.")
 
 
-def configured_agents(api_keys, custom_providers):
+def configured_agents(api_keys, custom_providers, include_paid_providers=True):
     """Turn every configured API key/provider into an independently callable agent."""
     agents = []
     for provider, keys in api_keys.items():
+        if provider == "deepseek" and not include_paid_providers:
+            continue
         for index, key in enumerate(keys):
             agents.append({
                 "id": f"{provider}-{index + 1}",
@@ -452,18 +478,8 @@ def check_provider_status(agent):
                 },
             }
         if agent["provider"] == "gemini":
-            # Use Google's key-authenticated REST endpoint and verify the exact
-            # model used by call_ai(), not just whether the key can list models.
-            response = requests.get(
-                "https://generativelanguage.googleapis.com/v1beta/models",
-                params={"key": agent["key"]},
-                timeout=10,
-            )
-            response.raise_for_status()
-            models = response.json().get("models", [])
-            target_model = f"models/{GEMINI_DEFAULT_MODEL}"
-            target = next((model for model in models if model.get("name") == target_model), None)
-            if not target or "generateContent" not in target.get("supportedGenerationMethods", []):
+            model_name = resolve_gemini_model(agent["key"])
+            if not model_name:
                 return {
                     "id": agent["id"],
                     "provider": agent["provider"],
@@ -471,12 +487,26 @@ def check_provider_status(agent):
                     "statusPercent": 0,
                     "statusLabel": "Model unavailable",
                     "detail": (
-                        f"Gemini key connected, but {GEMINI_DEFAULT_MODEL} is not available "
-                        "for this key/project."
+                        "Gemini key is valid, but no supported free Gemini model is "
+                        "available for this key/project."
                     ),
                     "credit": {
                         "label": "Model",
-                        "value": GEMINI_DEFAULT_MODEL,
+                        "value": "Free model unavailable",
+                        "percent": None,
+                    },
+                }
+            if model_name != GEMINI_DEFAULT_MODEL:
+                return {
+                    "id": agent["id"],
+                    "provider": agent["provider"],
+                    "status": "connected",
+                    "statusPercent": 100,
+                    "statusLabel": "Chat ready",
+                    "detail": f"Using free Gemini model {model_name}.",
+                    "credit": {
+                        "label": "Free tier",
+                        "value": "Provider quota applies",
                         "percent": None,
                     },
                 }
@@ -503,11 +533,11 @@ def check_provider_status(agent):
             "detail": (
                 "Connected. Check the provider dashboard for quota and billing."
                 if agent["provider"] != "openrouter"
-                else "Connected. Credit balance requires an OpenRouter management key."
+                else f"Using free OpenRouter model {OPENROUTER_FREE_MODEL}. Free route limits apply."
             ),
             "credit": {
                 "label": "Quota",
-                "value": "OpenRouter management key required" if agent["provider"] == "openrouter" else "Check provider dashboard",
+                "value": "Free route; provider limits apply" if agent["provider"] == "openrouter" else "Check provider dashboard",
                 "percent": None,
             },
         }
@@ -619,13 +649,42 @@ def get_gemini_client(api_key):
         http_options=genai.types.HttpOptions(timeout=UPSTREAM_TIMEOUT_SECONDS * 1000),
     )
 
+
+def resolve_gemini_model(api_key, preferred=None):
+    """Choose the first free Gemini model this key can actually generate with."""
+    response = requests.get(
+        "https://generativelanguage.googleapis.com/v1beta/models",
+        params={"key": api_key},
+        timeout=10,
+    )
+    response.raise_for_status()
+    models = response.json().get("models", [])
+    supported = {
+        str(model.get("name", "")).removeprefix("models/")
+        for model in models
+        if "generateContent" in model.get("supportedGenerationMethods", [])
+    }
+    candidates = tuple(dict.fromkeys(
+        model for model in (preferred, GEMINI_DEFAULT_MODEL, *GEMINI_FREE_MODEL_FALLBACKS)
+        if model
+    ))
+    for model in candidates:
+        if model in supported:
+            return model
+    return None
+
+
 def call_ai(prompt, provider, api_key, custom_model=None, timeout=UPSTREAM_TIMEOUT_SECONDS):
     if not api_key:
         raise ValueError(f"No API key provided for {provider}.")
     try:
         if provider == "gemini":
             client = get_gemini_client(api_key)
-            model_name = custom_model or GEMINI_DEFAULT_MODEL
+            model_name = resolve_gemini_model(api_key, custom_model)
+            if not model_name:
+                raise AIServiceError(
+                    "gemini: no supported free Gemini model is available for this key/project."
+                )
             resp = client.models.generate_content(model=model_name, contents=prompt)
             if not resp.text:
                 raise AIServiceError(f"{provider} returned an empty response.")
@@ -739,15 +798,25 @@ def pg_summary():
     api_keys = data.get("apiKeys", {})
     custom_providers = data.get("customProviders", [])
     selector = data.get("pgSelector")
+    include_paid_providers = data.get("includePaidProviders", False)
+    if not isinstance(include_paid_providers, bool):
+        return error_response("includePaidProviders must be a boolean.", 400)
     if selector is not None and not isinstance(selector, dict):
         return error_response("pgSelector must be an object.", 400)
     try:
         validate_provider_config(api_keys, custom_providers)
+        active_api_keys = api_keys
+        if not include_paid_providers:
+            active_api_keys = {
+                provider: keys
+                for provider, keys in api_keys.items()
+                if provider != "deepseek"
+            }
         summary = summarize_project_memory(
             message,
             clip_text(current_summary, MAX_PG_SUMMARY_LENGTH),
             selector,
-            api_keys,
+            active_api_keys,
             custom_providers,
         )
         return jsonify({"summary": summary})
@@ -783,9 +852,25 @@ def chat():
         return error_response("Request must use application/json.", 400)
     data = request.get_json(silent=True)
     try:
-        user_message, mode, debate_on, api_keys, custom_providers, pg_state = validate_request_data(data)
+        (
+            user_message,
+            mode,
+            debate_on,
+            include_paid_providers,
+            api_keys,
+            custom_providers,
+            pg_state,
+        ) = validate_request_data(data)
     except ValueError as e:
         return error_response(str(e), 400)
+
+    active_api_keys = api_keys
+    if not include_paid_providers:
+        active_api_keys = {
+            provider: keys
+            for provider, keys in api_keys.items()
+            if provider != "deepseek"
+        }
 
     session_id = data.get('sessionId')
     if session_id is not None and (not isinstance(session_id, str) or len(session_id) > 200):
@@ -795,7 +880,11 @@ def chat():
         session_id = f"session_{uuid.uuid4().hex}"
 
     try:
-        agents = configured_agents(api_keys, custom_providers)
+        agents = configured_agents(
+            active_api_keys,
+            custom_providers,
+            include_paid_providers=include_paid_providers,
+        )
         project_context = format_project_context(pg_state)
         initial_results = run_agents_parallel(
             agents,
@@ -820,7 +909,7 @@ def chat():
                 mode,
                 initial_results,
                 data.get("justiceSelector"),
-                api_keys,
+                active_api_keys,
                 custom_providers,
             )
             ai_reply = (
@@ -833,7 +922,7 @@ def chat():
             justice_provider, _, _ = selector_for(
                 "justice",
                 data.get("justiceSelector"),
-                api_keys,
+                active_api_keys,
                 custom_providers,
             )
             response_payload = {
@@ -847,7 +936,7 @@ def chat():
                 initial_results,
                 agents,
                 data.get("pgSelector"),
-                api_keys,
+                active_api_keys,
                 custom_providers,
             )
             ai_reply = (
@@ -860,7 +949,7 @@ def chat():
             chair_provider, _, _ = selector_for(
                 "pg",
                 data.get("pgSelector"),
-                api_keys,
+                active_api_keys,
                 custom_providers,
             )
             response_payload = {
