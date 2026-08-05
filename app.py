@@ -16,7 +16,7 @@ CORS(app)
 BUILTIN_PROVIDERS = {
     "deepseek":   {"base_url": "https://api.deepseek.com",           "model": "deepseek-chat"},
     "groq":       {"base_url": "https://api.groq.com/openai/v1",     "model": "llama-3.3-70b-versatile"},
-    "openrouter": {"base_url": "https://openrouter.ai/api/v1",       "model": "deepseek/deepseek-r1:free"},
+    "openrouter": {"base_url": "https://openrouter.ai/api/v1",       "model": "deepseek/deepseek-chat"},
 }
 GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
 MAX_MESSAGE_LENGTH = 100_000
@@ -31,6 +31,44 @@ class AIServiceError(Exception):
 
 def error_response(message, status):
     return jsonify({"error": message}), status
+
+
+def explain_provider_error(provider, error):
+    """Return a useful provider diagnosis without exposing keys or raw upstream text."""
+    status_code = getattr(error, "status_code", None)
+    if status_code is None:
+        status_code = getattr(error, "code", None)
+    response = getattr(error, "response", None)
+    if status_code is None and response is not None:
+        status_code = getattr(response, "status_code", None)
+    try:
+        status_code = int(status_code) if status_code is not None else None
+    except (TypeError, ValueError):
+        status_code = None
+
+    if status_code in {401, 403}:
+        return f"{provider}: API key is invalid, expired, or not permitted (HTTP {status_code})."
+    if status_code == 404:
+        return f"{provider}: model or API endpoint was not found (HTTP 404)."
+    if status_code == 429:
+        return f"{provider}: rate limit or account quota was reached (HTTP 429)."
+    if status_code is not None and 400 <= status_code < 500:
+        return f"{provider}: provider rejected the request (HTTP {status_code})."
+    if status_code is not None and status_code >= 500:
+        return f"{provider}: provider server error (HTTP {status_code}). Try again shortly."
+
+    error_text = str(error).lower()
+    if any(term in error_text for term in ("timeout", "timed out", "deadline exceeded")):
+        return f"{provider}: provider request timed out."
+    if any(term in error_text for term in ("connection", "dns", "network", "unreachable")):
+        return f"{provider}: could not connect to the provider."
+    if any(term in error_text for term in ("invalid api key", "authentication", "unauthorized")):
+        return f"{provider}: API key authentication failed."
+    if any(term in error_text for term in ("quota", "rate limit", "resource exhausted")):
+        return f"{provider}: account quota or rate limit was reached."
+    if any(term in error_text for term in ("model", "not found")):
+        return f"{provider}: configured model or endpoint was rejected."
+    return f"{provider}: provider returned an unexpected error ({type(error).__name__})."
 
 
 def validate_provider_config(api_keys, custom_providers):
@@ -402,12 +440,12 @@ def check_provider_status(agent):
                 "percent": None,
             },
         }
-    except Exception:
+    except Exception as error:
         return {
             "id": agent["id"],
             "provider": agent["provider"],
             "status": "unavailable",
-            "detail": "Connection or API key check failed. Check the provider dashboard.",
+            "detail": explain_provider_error(agent["provider"], error),
             "credit": {"label": "Quota", "value": "Unavailable", "percent": None},
         }
 
@@ -537,7 +575,7 @@ def call_ai(prompt, provider, api_key, custom_model=None, timeout=UPSTREAM_TIMEO
     except Exception as e:
         if isinstance(e, (ValueError, AIServiceError)):
             raise
-        raise AIServiceError(f"{provider} request failed.") from e
+        raise AIServiceError(explain_provider_error(provider, e)) from e
 
 def call_custom_ai(base_url, api_key, model_name, prompt, timeout=UPSTREAM_TIMEOUT_SECONDS):
     if not base_url or not api_key or not model_name:
@@ -562,7 +600,7 @@ def call_custom_ai(base_url, api_key, model_name, prompt, timeout=UPSTREAM_TIMEO
     except Exception as e:
         if isinstance(e, (ValueError, AIServiceError)):
             raise
-        raise AIServiceError("Custom provider request failed.") from e
+        raise AIServiceError(explain_provider_error("custom provider", e)) from e
 
 @app.route('/')
 def index():
